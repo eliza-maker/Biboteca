@@ -18,3 +18,10 @@ def control_automatico(temperatura, luz):
         lampara = True
 
     return ventilador, lampara
+
+def control_manual(estado_ventilador, estado_lampara):
+
+    ventilador = estado_ventilador
+    lampara = estado_lampara
+
+    return ventilador, lampara
