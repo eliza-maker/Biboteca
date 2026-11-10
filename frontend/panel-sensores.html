@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Panel frontal – Domótica (API)</title>
+<style>
+:root{--panel:#d4d0c8;--sh:#808080;--scr:#0b130b;--ink:#161616;--blue:#0a246a;--grn:#1fbf3f;--red:#d41c1c;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px);color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:#8f8b83;font:13px/1.35 "Segoe UI",Tahoma,Arial,sans-serif;color:var(--ink)}
+.win{max-width:1200px;margin:10px auto;background:var(--panel);border:2px solid;border-color:#fff #404040 #404040 #fff}
+.title{background:linear-gradient(90deg,#0a246a,#a6caf0);color:#fff;padding:4px 8px;font-weight:600;display:flex;justify-content:space-between;gap:8px}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:8px;border-bottom:1px solid var(--sh)}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:10px;padding:10px}
+.box{border:2px groove #fff;padding:8px;background:var(--panel);min-width:0}
+.box h2{margin:0 0 6px;font-size:13px;font-weight:700}
+canvas{display:block;width:100%;height:150px;border:2px solid;border-color:#808080 #fff #fff #808080}
+.row{display:flex;gap:10px;align-items:stretch;margin-top:8px}
+.col{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.num{font:700 20px Consolas,"Courier New",monospace;background:#fff;border:2px solid;border-color:#808080 #fff #fff #808080;padding:2px 8px;text-align:right}
+.tube{width:22px;height:112px;background:#fff;border:2px solid;border-color:#808080 #fff #fff #808080;position:relative;flex:none}
+.tube i{position:absolute;left:0;right:0;bottom:0;background:var(--ora,#e86a00);transition:height .2s}
+label{display:block;font-size:12px}
+label b{font-family:Consolas,monospace;float:right}
+input[type=range]{width:100%;margin:2px 0 6px;accent-color:#0a246a}
+button{font:inherit;font-weight:600;padding:5px 12px;background:var(--panel);border:2px solid;border-color:#fff #404040 #404040 #fff;cursor:pointer;color:var(--ink)}
+button:active,button.on{border-color:#404040 #fff #fff #404040;background:#c4c0b8}
+button:focus-visible,input:focus-visible{outline:2px solid #0a246a;outline-offset:2px}
+.led{display:inline-block;width:16px;height:16px;border-radius:50%;border:2px solid #333;background:#144d1c;vertical-align:-3px;margin-right:6px}
+.led.g{background:var(--grn);box-shadow:0 0 8px var(--grn)}
+.led.r{background:var(--red);box-shadow:0 0 8px var(--red)}
+.led.o{background:#ff9d00;box-shadow:0 0 8px #ff9d00}
+.seg{display:inline-flex}
+.seg button{margin:0}
+.door{position:relative;width:96px;height:130px;perspective:300px;margin:0 auto;flex:none}
+.frame{position:absolute;inset:0;border:6px solid #5a4a38;background:#1b1b1b}
+.leaf{position:absolute;inset:0;background:#b07a3c;border:3px solid #7a5224;transform-origin:left center;transition:transform .5s}
+.door.open .leaf{transform:rotateY(-68deg)}
+.mg{position:absolute;width:8px;height:22px;background:#c00;border:1px solid #400}
+.mg.f{right:0;top:50px;background:#2a6ad8}
+.mg.d{right:2px;top:50px}
+.fan{width:150px;height:150px;margin:0 auto;flex:none}
+.siren{width:96px;height:96px;margin:0 auto;flex:none}
+.dome{fill:#5a1010;transition:fill .1s}
+.alarm .dome{fill:#ff2a2a;animation:bl .5s steps(2) infinite}
+.waves{opacity:0}.alarm .waves{opacity:1;animation:bl .5s steps(2) infinite}
+@keyframes bl{50%{opacity:.25}}
+.banner{margin-top:8px;padding:6px 8px;background:#fff;border:2px solid;border-color:#808080 #fff #fff #808080;font-weight:600;min-height:32px}
+.alarm .banner{background:#ffd6d6;color:#900}
+.note{font-size:11.5px;color:#333;margin:6px 0 0}
+@media (prefers-reduced-motion:reduce){.alarm .dome,.alarm .waves{animation:none}}
+</style>
+</head>
+<body>
+<div class="win" id="win">
+ <div class="title"><span>Panel frontal.vi – Simulador de sensores y actuadores</span><span id="clock">00:00:00</span></div>
+ <div class="bar">
+  <button id="run" class="on">Detener</button>
+  <span><span class="led g" id="runLed"></span>Simulación en ejecución</span>
+  <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="snd"> Sonido de alarma</label>
+  <button id="reset">Borrar gráficos</button>
+ </div>
+
+ <div class="grid">
+  <!-- TEMPERATURA -->
+  <section class="box">
+   <h2>Sensor de temperatura</h2>
+   <canvas id="cT"></canvas>
+   <div class="row">
+    <div class="tube" aria-hidden="true"><i id="thT"></i></div>
+    <div class="col">
+     <div class="num" id="nT">0.0 °C</div>
+     <label>Temperatura ambiente <b id="vAmb"></b></label>
+     <input type="range" id="amb" min="0" max="60" step="0.5" value="24">
+    </div>
+   </div>
+  </section>
+
+  <!-- HUMEDAD -->
+  <section class="box">
+   <h2>Sensor de humedad</h2>
+   <canvas id="cH"></canvas>
+   <div class="row">
+    <div class="tube" aria-hidden="true"><i id="thH" style="background:#1f6fe0"></i></div>
+    <div class="col">
+     <div class="num" id="nH">0.0 %HR</div>
+     <label>Humedad ambiente <b id="vHum"></b></label>
+     <input type="range" id="hum" min="0" max="100" step="1" value="50">
+    </div>
+   </div>
+  </section>
+
+  <!-- MAGNETICO -->
+  <section class="box">
+   <h2>Sensor magnético de puerta</h2>
+   <canvas id="cD"></canvas>
+   <div class="row">
+    <div class="door" id="door"><div class="frame"></div><div class="mg f"></div><div class="leaf"><div class="mg d"></div></div></div>
+    <div class="col">
+     <div class="num" id="nD" style="font-size:18px">CERRADA</div>
+     <div><span class="led g" id="dLed"></span><span id="dTxt">Contacto cerrado (imán alineado)</span></div>
+     <button id="tog">Abrir puerta</button>
+    </div>
+   </div>
+  </section>
+
+  <!-- MOTOR -->
+  <section class="box">
+   <h2>Motor con ventilador</h2>
+   <div class="row" style="margin-top:0">
+    <svg class="fan" viewBox="-50 -50 100 100" aria-label="Ventilador">
+     <circle r="47" fill="#e9e6df" stroke="#404040" stroke-width="2"/>
+     <g id="rot" fill="#2d5da8" stroke="#143466" stroke-width="1">
+      <path id="b0" d="M0,0 C12,-6 16,-30 3,-43 C-9,-35 -9,-12 0,0Z"/>
+      <path d="M0,0 C12,-6 16,-30 3,-43 C-9,-35 -9,-12 0,0Z" transform="rotate(90)"/>
+      <path d="M0,0 C12,-6 16,-30 3,-43 C-9,-35 -9,-12 0,0Z" transform="rotate(180)"/>
+      <path d="M0,0 C12,-6 16,-30 3,-43 C-9,-35 -9,-12 0,0Z" transform="rotate(270)"/>
+      <circle r="6" fill="#444"/>
+     </g>
+    </svg>
+    <div class="col">
+     <div class="num" id="nR">0 RPM</div>
+     <div class="seg"><button id="mAuto" class="on">Auto</button><button id="mMan">Manual</button></div>
+     <label>Velocidad manual <b id="vFan"></b></label>
+     <input type="range" id="fan" min="0" max="100" value="0">
+     <div><span class="led" id="mLed"></span><span id="mTxt">Motor detenido</span></div>
+    </div>
+   </div>
+  </section>
+
+  <!-- ALARMA -->
+  <section class="box" id="alBox">
+   <h2>Alarma</h2>
+   <div class="row" style="margin-top:0">
+    <svg class="siren" viewBox="0 0 100 100" aria-label="Sirena">
+     <g class="waves" fill="none" stroke="#c00" stroke-width="3" stroke-linecap="round">
+      <path d="M12,40 Q4,52 12,64"/><path d="M4,32 Q-8,52 4,72"/><path d="M88,40 Q96,52 88,64"/><path d="M96,32 Q108,52 96,72"/>
+     </g>
+     <rect x="22" y="70" width="56" height="16" fill="#444"/>
+     <path class="dome" d="M26,70 A24,28 0 0 1 74,70Z" stroke="#222" stroke-width="2"/>
+    </svg>
+    <div class="col">
+     <div><span class="led" id="aLed"></span><b id="aTxt">Sin alarma</b></div>
+     <div class="seg"><button id="arm" class="on">Armada</button><button id="mute">Silenciar</button></div>
+     <p class="note">Se activa con temperatura alta, humedad alta o puerta abierta con la alarma armada.</p>
+    </div>
+   </div>
+   <div class="banner" id="ban">Todo en orden.</div>
+  </section>
+
+  <!-- UMBRALES -->
+  <section class="box">
+   <h2>Umbrales de control</h2>
+   <label>Ventilador enciende desde <b id="vOn"></b></label>
+   <input type="range" id="tOn" min="15" max="45" step="0.5" value="28">
+   <label>Alarma por temperatura <b id="vAT"></b></label>
+   <input type="range" id="tAl" min="20" max="60" step="0.5" value="38">
+   <label>Alarma por humedad <b id="vAH"></b></label>
+   <input type="range" id="hAl" min="30" max="100" step="1" value="85">
+   <p class="note">En modo Auto el motor sube de velocidad entre el umbral de encendido y 8 °C por encima. Al girar enfría el ambiente simulado.</p>
+  </section>
+ </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+// Vacío = la página la sirve la misma API (http://127.0.0.1:5000). Si abres el HTML por separado: 'http://127.0.0.1:5000'
+const API='';
+const N=150;
+const D={t:[],h:[],d:[]};
+let E=null,ang=0,last=performance.now(),ac=null,tickN=0;
+
+async function api(ruta,metodo='GET',cuerpo){
+ const r=await fetch(API+'/api'+ruta,{method:metodo,headers:{'Content-Type':'application/json'},body:cuerpo?JSON.stringify(cuerpo):undefined});
+ if(!r.ok)throw new Error(r.status);
+ return r.json();
+}
+const enviar=(ruta,cuerpo)=>api(ruta,'PUT',cuerpo).then(()=>sondear(false)).catch(()=>{});
+const T={};
+const enviarDeb=(id,ruta,cuerpo)=>{clearTimeout(T[id]);T[id]=setTimeout(()=>enviar(ruta,cuerpo),80)};
+
+function draw(cv,d,min,max,thr,step,color){
+ const r=window.devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;
+ if(cv.width!==Math.round(w*r)||cv.height!==Math.round(h*r)){cv.width=Math.round(w*r);cv.height=Math.round(h*r)}
+ const c=cv.getContext('2d');c.setTransform(r,0,0,r,0,0);
+ c.fillStyle='#0b130b';c.fillRect(0,0,w,h);
+ const L=32,T0=8,B=6,pw=w-L-8,ph=h-T0-B;
+ c.lineWidth=1;c.strokeStyle='#1f3a1f';c.fillStyle='#7fbf7f';c.font='10px Consolas,monospace';c.textAlign='right';
+ for(let i=0;i<=4;i++){const y=T0+ph*i/4;c.beginPath();c.moveTo(L,y);c.lineTo(L+pw,y);c.stroke();
+  c.fillText((max-(max-min)*i/4).toFixed(step?1:0),L-4,y+3)}
+ for(let i=0;i<=10;i++){const x=L+pw*i/10;c.beginPath();c.moveTo(x,T0);c.lineTo(x,T0+ph);c.stroke()}
+ const Y=v=>T0+ph*(1-(v-min)/(max-min));
+ if(thr!=null){c.strokeStyle='#ffd200';c.setLineDash([5,4]);c.beginPath();c.moveTo(L,Y(thr));c.lineTo(L+pw,Y(thr));c.stroke();c.setLineDash([])}
+ if(!d.length)return;
+ c.strokeStyle=color;c.lineWidth=2;c.beginPath();
+ d.forEach((v,i)=>{const x=L+pw*(N-d.length+i)/(N-1),y=Y(v);
+  if(i===0)c.moveTo(x,y);else{if(step)c.lineTo(x,Y(d[i-1]));c.lineTo(x,y)}});
+ c.stroke();
+}
+function push(a,v){a.push(v);if(a.length>N)a.shift()}
+function beep(f){if(!ac||!$('snd').checked)return;try{const o=ac.createOscillator(),g=ac.createGain();o.type='square';o.frequency.value=f;g.gain.value=.04;o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+.17)}catch(e){}}
+
+function setSlider(id,v){const el=$(id);if(document.activeElement!==el)el.value=v}
+function labels(){
+ $('vAmb').textContent=(+$('amb').value).toFixed(1)+' °C';$('vHum').textContent=$('hum').value+' %';
+ $('vFan').textContent=$('fan').value+' %';$('vOn').textContent=(+$('tOn').value).toFixed(1)+' °C';
+ $('vAT').textContent=(+$('tAl').value).toFixed(1)+' °C';$('vAH').textContent=$('hAl').value+' %';
+}
+function ui(){
+ const s=E.sensores,v=E.actuadores.ventilador,a=E.actuadores.alarma,u=E.umbrales,t=s.temperatura.valor,h=s.humedad.valor,ab=s.puerta.abierta;
+ setSlider('amb',E.simulacion.temperatura_ambiente);setSlider('hum',E.simulacion.humedad_ambiente);
+ setSlider('fan',v.velocidad_manual);setSlider('tOn',u.ventilador_on);setSlider('tAl',u.alarma_temperatura);setSlider('hAl',u.alarma_humedad);
+ labels();
+ $('run').textContent=E.corriendo?'Detener':'Ejecutar';$('run').classList.toggle('on',E.corriendo);
+ $('runLed').className='led '+(E.corriendo?'g':'');
+ $('nT').textContent=t.toFixed(1)+' °C';$('nH').textContent=h.toFixed(1)+' %HR';
+ $('thT').style.height=Math.max(0,Math.min(100,t/60*100))+'%';
+ $('thT').style.background=t>=u.alarma_temperatura?'#d41c1c':t>=u.ventilador_on?'#ff9d00':'#e86a00';
+ $('thH').style.height=Math.max(0,Math.min(100,h))+'%';
+ $('nD').textContent=ab?'ABIERTA':'CERRADA';
+ $('door').classList.toggle('open',ab);
+ $('dLed').className='led '+(ab?'r':'g');
+ $('dTxt').textContent=ab?'Contacto abierto (imán separado)':'Contacto cerrado (imán alineado)';
+ $('tog').textContent=ab?'Cerrar puerta':'Abrir puerta';
+ const auto=v.modo==='auto';
+ $('mAuto').classList.toggle('on',auto);$('mMan').classList.toggle('on',!auto);$('fan').disabled=auto;
+ $('nR').textContent=v.rpm+' RPM';
+ $('mLed').className='led '+(v.encendido?'g':'');
+ $('mTxt').textContent=v.encendido?'Motor girando al '+v.velocidad_pct+' %':'Motor detenido';
+ $('arm').textContent=a.armada?'Armada':'Desarmada';$('arm').classList.toggle('on',a.armada);
+ $('alBox').classList.toggle('alarm',a.activa);
+ $('aLed').className='led '+(a.activa?'r':a.causas.length?'o':'');
+ $('aTxt').textContent=a.activa?'ALARMA ACTIVA':a.causas.length?'Alarma silenciada':'Sin alarma';
+ $('ban').textContent=a.causas.length?'Causa: '+a.causas.join(', ')+'.':'Todo en orden.';
+}
+function render(){
+ if(!E)return;
+ draw($('cT'),D.t,0,60,E.umbrales.alarma_temperatura,1,'#39ff5a');
+ draw($('cH'),D.h,0,100,E.umbrales.alarma_humedad,0,'#4db8ff');
+ draw($('cD'),D.d,-0.1,1.2,null,1,'#ffb347');
+}
+async function sondear(graf=true){
+ try{E=await api('/estado')}catch(e){$('clock').textContent='Sin conexión con la API';return}
+ if(graf&&E.corriendo){push(D.t,E.sensores.temperatura.valor);push(D.h,E.sensores.humedad.valor);push(D.d,E.sensores.puerta.abierta?1:0);
+  tickN++;if(E.actuadores.alarma.activa)beep(tickN%2?880:660)}
+ $('clock').textContent=new Date().toLocaleTimeString('es-CO',{hour12:false});
+ ui();render();
+}
+function spin(now){
+ const dt=(now-last)/1000;last=now;
+ if(E){ang=(ang+E.actuadores.ventilador.rpm/60*360*dt*0.12)%360;$('rot').setAttribute('transform','rotate('+ang.toFixed(1)+')')}
+ requestAnimationFrame(spin);
+}
+
+// controles -> API
+$('run').onclick=()=>E&&enviar('/simulacion/ejecucion',{activa:!E.corriendo});
+$('reset').onclick=()=>{D.t=[];D.h=[];D.d=[];render()};
+$('tog').onclick=()=>E&&enviar('/simulacion/puerta',{abierta:!E.sensores.puerta.abierta});
+$('mAuto').onclick=()=>enviar('/actuadores/ventilador',{modo:'auto'});
+$('mMan').onclick=()=>enviar('/actuadores/ventilador',{modo:'manual'});
+$('arm').onclick=()=>E&&enviar('/actuadores/alarma',{armada:!E.actuadores.alarma.armada});
+$('mute').onclick=()=>enviar('/actuadores/alarma',{silenciada:true});
+$('snd').onchange=()=>{if($('snd').checked&&!ac){try{ac=new (window.AudioContext||window.webkitAudioContext)()}catch(e){}}};
+const sl=(id,ruta,clave,campo)=>$(id).addEventListener('input',()=>{labels();enviarDeb(id,ruta,{[clave]:+$(id).value})});
+sl('amb','/simulacion/temperatura','ambiente');sl('hum','/simulacion/humedad','ambiente');
+sl('fan','/actuadores/ventilador','velocidad');
+sl('tOn','/umbrales','ventilador_on');sl('tAl','/umbrales','alarma_temperatura');sl('hAl','/umbrales','alarma_humedad');
+window.addEventListener('resize',render);
+
+labels();sondear();setInterval(sondear,250);requestAnimationFrame(spin);
+</script>
+</body>
+</html>
