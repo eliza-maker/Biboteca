@@ -17,7 +17,7 @@ def _get(ruta):
 
 def _put(ruta, datos):
     r = requests.put(BASE + ruta, json=datos, timeout=TIMEOUT)
-    if r.status_code == 400:
+    if r.status_code in (400, 409):
         raise ValueError(r.json().get("error", "Solicitud inválida"))
     r.raise_for_status()
     return r.json()
@@ -41,12 +41,14 @@ def obtener_ventilador():
     return _get("/actuadores/ventilador")
 
 
-def poner_ventilador(modo=None, velocidad=None):
+def poner_ventilador(modo=None, velocidad=None, *, requiere_manual=False):
     cuerpo = {}
     if modo is not None:
         cuerpo["modo"] = modo
     if velocidad is not None:
         cuerpo["velocidad"] = velocidad
+        if requiere_manual:
+            cuerpo["requiere_manual"] = True
     return _put("/actuadores/ventilador", cuerpo)
 
 
@@ -92,14 +94,24 @@ def texto_puerta():
 
 
 def texto_ventilador():
-    d = obtener_ventilador()
-    if not d["encendido"]:
-        return f"🌀 Ventilador: apagado (modo {d['modo']})"
-    return f"🌀 Ventilador: {d['rpm']} RPM ({d['velocidad_pct']} %), modo {d['modo']}"
+    return _formatear_ventilador(obtener_ventilador())
+
+
+def _formatear_ventilador(d):
+    estado = "encendido" if d["encendido"] else "apagado"
+    return f"🌀 Ventilador: {estado}, {d['rpm']} RPM ({d['velocidad_pct']} %), modo {d['modo']}"
+
+
+def cambiar_modo_ventilador(modo):
+    d = poner_ventilador(modo=modo)
+    return f"🌀 Modo del ventilador: {'manual' if d['modo'] == 'manual' else 'automático'}."
 
 
 def texto_alarma():
-    d = obtener_alarma()
+    return _formatear_alarma(obtener_alarma())
+
+
+def _formatear_alarma(d):
     if d["activa"]:
         return "🚨 Alarma ACTIVA: " + ", ".join(d["causas"])
     if d["silenciada"]:
@@ -108,17 +120,42 @@ def texto_alarma():
 
 
 def texto_estado():
-    return "\n".join([texto_temperatura(), texto_humedad(), texto_puerta(),
-                      texto_ventilador(), texto_alarma()])
+    estado = obtener_estado()
+    sensores = estado["sensores"]
+    actuadores = estado["actuadores"]
+    temperatura = sensores["temperatura"]
+    humedad = sensores["humedad"]
+    simulacion = "en ejecución" if estado["corriendo"] else "pausada"
+    return "\n".join([
+        "📚 Estado de Biboteca",
+        f"🧪 Simulación {simulacion}",
+        f"🌡️ Temperatura: {temperatura['valor']:.1f} {temperatura['unidad']}",
+        f"💧 Humedad: {humedad['valor']:.1f} {humedad['unidad']}",
+        f"🚪 Puerta: {sensores['puerta']['estado']}",
+        _formatear_ventilador(actuadores["ventilador"]),
+        _formatear_alarma(actuadores["alarma"]),
+    ])
 
 
-def comando_ventilador(*args):
+def comando_ventilador(*args, requiere_manual=False):
     """/ventilador            -> estado
     /ventilador auto        -> modo automático
     /ventilador 60          -> manual al 60 %
     /ventilador manual 60   -> manual al 60 %"""
     if not args:
         return texto_ventilador()
+    if requiere_manual:
+        uso = "⚠️ Usa /ventilador seguido de un número entero entre 0 y 100."
+        if len(args) != 1 or not args[0].isascii() or not args[0].isdecimal() or len(args[0]) > 3:
+            return uso
+        velocidad = int(args[0])
+        if velocidad > 100:
+            return uso
+        try:
+            d = poner_ventilador(velocidad=velocidad, requiere_manual=True)
+        except ValueError as error:
+            return f"⚠️ {error}"
+        return f"🌀 Velocidad manual configurada: {d['velocidad_manual']} %."
     try:
         if args[0] == "auto":
             poner_ventilador(modo="auto")

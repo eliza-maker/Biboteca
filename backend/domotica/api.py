@@ -4,7 +4,7 @@ El servidor es la única fuente de verdad: simula los sensores, aplica la lógic
 actuadores y expone una URL por variable y por actuador. El panel HTML y el bot de
 Telegram consultan/modifican lo mismo a través de estas URLs.
 """
-from pathlib import Path #Se importa Path para poder llamar a frontend/
+from pathlib import Path
 import random
 import threading
 import time
@@ -12,6 +12,7 @@ import time
 from flask import Flask, abort, jsonify, request, send_from_directory
 
 app = Flask(__name__, static_folder="static")
+FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
 lock = threading.Lock()
 MAX_RPM = 3000
 
@@ -140,7 +141,7 @@ def _cors(r):  # permite abrir el HTML desde otro origen (p. ej. Live Server)
 # ------------------------------------------------------------------ endpoints
 @app.get("/")
 def panel():
-    return send_from_directory(Path(__file__).resolve().parent.parent / "frontend", "panel-sensores.html") #ruta correcta panel de sensores
+    return send_from_directory(FRONTEND_DIR, "panel-sensores.html")
 
 
 @app.get("/api")
@@ -188,17 +189,19 @@ def get_ventilador():
 
 @app.put("/api/actuadores/ventilador")
 def put_ventilador():
-    """Cuerpo: {"modo": "auto"|"manual", "velocidad": 0-100}. Si solo llega velocidad, pasa a manual."""
+    """Actualiza modo o velocidad. requiere_manual exige que el modo actual sea manual."""
     d = _json()
     with lock:
         v = ST["ventilador"]
+        modo = d.get("modo", v["modo"])
+        if modo not in ("auto", "manual"):
+            abort(400, "'modo' debe ser 'auto' o 'manual'")
         if "velocidad" in d:
+            if "requiere_manual" in d and _bool(d, "requiere_manual") and v["modo"] != "manual":
+                return jsonify(error="Activa el modo manual con /manual antes de cambiar la velocidad."), 409
             v["velocidad_manual"] = int(_num(d, "velocidad", 0, 100))
-            v["modo"] = "manual"
-        if "modo" in d:
-            if d["modo"] not in ("auto", "manual"):
-                abort(400, "'modo' debe ser 'auto' o 'manual'")
-            v["modo"] = d["modo"]
+            modo = d.get("modo", "manual")
+        v["modo"] = modo
         return jsonify(v_ventilador())
 
 
