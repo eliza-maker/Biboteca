@@ -3,103 +3,133 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Panel frontal – Domótica (API)</title>
+<title>Biboteca | Panel ambiental</title>
 <style>
-:root{--panel:#d4d0c8;--sh:#808080;--scr:#0b130b;--ink:#161616;--blue:#0a246a;--grn:#1fbf3f;--red:#d41c1c;
-box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-html{scroll-padding-top:env(safe-area-inset-top,0px);color-scheme:light}
-*{box-sizing:border-box}
-body{margin:0;background:#8f8b83;font:13px/1.35 "Segoe UI",Tahoma,Arial,sans-serif;color:var(--ink)}
-.win{max-width:1200px;margin:10px auto;background:var(--panel);border:2px solid;border-color:#fff #404040 #404040 #fff}
-.title{background:linear-gradient(90deg,#0a246a,#a6caf0);color:#fff;padding:4px 8px;font-weight:600;display:flex;justify-content:space-between;gap:8px}
-.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:8px;border-bottom:1px solid var(--sh)}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:10px;padding:10px}
-.box{border:2px groove #fff;padding:8px;background:var(--panel);min-width:0}
-.box h2{margin:0 0 6px;font-size:13px;font-weight:700}
-canvas{display:block;width:100%;height:150px;border:2px solid;border-color:#808080 #fff #fff #808080}
-.row{display:flex;gap:10px;align-items:stretch;margin-top:8px}
-.col{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
-.num{font:700 20px Consolas,"Courier New",monospace;background:#fff;border:2px solid;border-color:#808080 #fff #fff #808080;padding:2px 8px;text-align:right}
-.tube{width:22px;height:112px;background:#fff;border:2px solid;border-color:#808080 #fff #fff #808080;position:relative;flex:none}
-.tube i{position:absolute;left:0;right:0;bottom:0;background:var(--ora,#e86a00);transition:height .2s}
-label{display:block;font-size:12px}
-label b{font-family:Consolas,monospace;float:right}
-input[type=range]{width:100%;margin:2px 0 6px;accent-color:#0a246a}
-button{font:inherit;font-weight:600;padding:5px 12px;background:var(--panel);border:2px solid;border-color:#fff #404040 #404040 #fff;cursor:pointer;color:var(--ink)}
-button:active,button.on{border-color:#404040 #fff #fff #404040;background:#c4c0b8}
-button:focus-visible,input:focus-visible{outline:2px solid #0a246a;outline-offset:2px}
-.led{display:inline-block;width:16px;height:16px;border-radius:50%;border:2px solid #333;background:#144d1c;vertical-align:-3px;margin-right:6px}
-.led.g{background:var(--grn);box-shadow:0 0 8px var(--grn)}
-.led.r{background:var(--red);box-shadow:0 0 8px var(--red)}
-.led.o{background:#ff9d00;box-shadow:0 0 8px #ff9d00}
-.seg{display:inline-flex}
-.seg button{margin:0}
-.door{position:relative;width:96px;height:130px;perspective:300px;margin:0 auto;flex:none}
-.frame{position:absolute;inset:0;border:6px solid #5a4a38;background:#1b1b1b}
-.leaf{position:absolute;inset:0;background:#b07a3c;border:3px solid #7a5224;transform-origin:left center;transition:transform .5s}
-.door.open .leaf{transform:rotateY(-68deg)}
-.mg{position:absolute;width:8px;height:22px;background:#c00;border:1px solid #400}
-.mg.f{right:0;top:50px;background:#2a6ad8}
-.mg.d{right:2px;top:50px}
-.fan{width:150px;height:150px;margin:0 auto;flex:none}
-.siren{width:96px;height:96px;margin:0 auto;flex:none}
-.dome{fill:#5a1010;transition:fill .1s}
-.alarm .dome{fill:#ff2a2a;animation:bl .5s steps(2) infinite}
-.waves{opacity:0}.alarm .waves{opacity:1;animation:bl .5s steps(2) infinite}
-@keyframes bl{50%{opacity:.25}}
-.banner{margin-top:8px;padding:6px 8px;background:#fff;border:2px solid;border-color:#808080 #fff #fff #808080;font-weight:600;min-height:32px}
-.alarm .banner{background:#ffd6d6;color:#900}
-.note{font-size:11.5px;color:#333;margin:6px 0 0}
-@media (prefers-reduced-motion:reduce){.alarm .dome,.alarm .waves{animation:none}}
+:root {
+ color-scheme: light;
+ --ink: #182338;
+ --muted: #4e5968;
+ --line: #a2a9b3;
+ --blue: #143e7d;
+ --panel: #e4e6e8;
+ --bevel: #fff #8b929d #8b929d #fff;
+ font-family: "Segoe UI", Tahoma, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--panel); color: var(--ink); font-size: 14px; line-height: 1.5; }
+.win { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
+.title {
+ display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap;
+ gap: 12px; padding: 14px clamp(12px, 2vw, 28px);
+ color: #fff; background: linear-gradient(105deg, #102959, #255794 66%, #346ca8);
+ border-bottom: 2px solid #102959;
+}
+.title h1 { margin: 0; font-size: clamp(24px, 2.5vw, 36px); line-height: 1.1; }
+.title p { margin: 3px 0 0; color: #e1ecf9; font-size: 13px; }
+.connection {
+ display: flex; flex-direction: column; gap: 2px; padding: 6px 12px;
+ background: #102959; border: 1px solid #7f9fc7;
+}
+.connection small { color: #e1ecf9; }
+#clock { font: 700 15px Consolas, monospace; }
+.bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 10px clamp(12px, 2vw, 28px); border-bottom: 1px solid var(--line); }
+.actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.status { display: inline-flex; align-items: center; gap: 6px; font-weight: 650; }
+.grid { flex: 1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-template-rows: minmax(min-content, 1.35fr) minmax(min-content, 1fr); gap: 10px; padding: 10px; }
+.box {
+ min-width: 0; display: flex; flex-direction: column; padding: 12px; border: 2px solid; border-color: var(--bevel);
+ background: #eef0f2;
+}
+.box h2 { margin: -12px -12px 10px; padding: 6px 12px; font-size: 15px; background: #d5dbe5; border-bottom: 1px solid var(--line); }
+canvas { display: block; width: 100%; height: 0; min-height: 124px; flex: 1 0 124px; margin: 10px 0 12px; border: 2px inset #a2a9b3; background: #0c161c; }
+.row { display: flex; gap: 12px; align-items: center; margin-top: 12px; }
+.col { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.num { padding: 2px 8px; background: #fff; border: 2px inset #c3c9d0; font: 700 clamp(23px, 3vw, 34px)/1.25 Consolas, monospace; }
+label { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+label b { color: var(--ink); white-space: nowrap; font-variant-numeric: tabular-nums; }
+input { accent-color: var(--blue); }
+input[type=range] { width: 100%; height: 26px; margin: 0 0 6px; cursor: pointer; }
+input[type=range]:disabled { opacity: .45; cursor: default; }
+button {
+ font: inherit; font-size: 13px; font-weight: 650; min-height: 38px; padding: 6px 11px;
+ background: var(--panel); border: 2px solid; border-color: var(--bevel); cursor: pointer; color: var(--ink);
+}
+button:hover { background: #f5f7fa; }
+button:disabled { opacity: .55; cursor: default; }
+button.on, button:active { border-color: #7b8da6 #f7fbff #f7fbff #7b8da6; background: #cbdcf1; color: #102959; }
+#run { background: var(--blue); border-color: #5882b8 #102959 #102959 #5882b8; color: #fff; }
+#run:hover { background: #24569a; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+.led { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #768782; vertical-align: 1px; margin-right: 4px; }
+.led.g { background: #16805c; }
+.led.r { background: #b42332; }
+.led.o { background: #a65b12; }
+.seg { display: flex; flex-wrap: wrap; gap: 4px; }
+.door { position: relative; width: 42px; height: 58px; perspective: 150px; flex: none; }
+.frame { position: absolute; inset: 0; border: 3px solid #85674a; background: #644c37; border-radius: 4px; }
+.leaf { position: absolute; inset: 3px; background: #d9aa76; border-radius: 2px; transform-origin: left center; transition: transform .35s; }
+.door.open .leaf { transform: rotateY(-68deg); }
+.mg { position: absolute; width: 3px; height: 8px; right: 4px; top: 24px; background: #846346; border-radius: 2px; }
+.mg.f { right: 0; background: #f1d2a9; }
+.fan, .siren { width: clamp(70px, 10vw, 150px); height: auto; flex: none; }
+.dome { fill: #d9a2a8; }
+.alarm .dome { fill: #bd3141; }
+.waves { opacity: 0; }
+.alarm .waves { opacity: 1; }
+.banner { margin-top: 14px; padding: 8px 10px; background: #fff; border: 2px inset #c3c9d0; font-weight: 650; }
+.alarm .banner { background: #fce8ea; color: #9b2230; }
+.note { margin: 5px 0 0; color: var(--muted); font-size: 12px; }
+@media (max-width: 950px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto; } }
+@media (max-width: 580px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+@media (prefers-reduced-motion: reduce) { .leaf { transition: none; } }
 </style>
 </head>
 <body>
-<div class="win" id="win">
- <div class="title"><span>Panel frontal.vi – Simulador de sensores y actuadores</span><span id="clock">00:00:00</span></div>
+<main class="win">
+ <header class="title">
+  <div><h1>Biboteca</h1><p>Monitoreo ambiental y control de la biblioteca</p></div>
+  <div class="connection"><small>Última actualización</small><span id="clock">Conectando…</span></div>
+ </header>
  <div class="bar">
-  <button id="run" class="on">Detener</button>
-  <span><span class="led g" id="runLed"></span>Simulación en ejecución</span>
-  <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="snd"> Sonido de alarma</label>
-  <button id="reset">Borrar gráficos</button>
+  <span class="status"><span class="led" id="runLed" aria-hidden="true"></span><span id="runStatus" role="status">Conectando con la API</span></span>
+  <div class="actions">
+   <label><input type="checkbox" id="snd"> Sonido de alarma</label>
+   <button id="reset" type="button">Borrar gráficas</button>
+   <button id="run" type="button" disabled>Pausar simulación</button>
+  </div>
  </div>
 
  <div class="grid">
   <!-- TEMPERATURA -->
   <section class="box">
-   <h2>Sensor de temperatura</h2>
-   <canvas id="cT"></canvas>
-   <div class="row">
-    <div class="tube" aria-hidden="true"><i id="thT"></i></div>
-    <div class="col">
-     <div class="num" id="nT">0.0 °C</div>
-     <label>Temperatura ambiente <b id="vAmb"></b></label>
+   <h2>Temperatura</h2>
+   <div class="num" id="nT">— °C</div>
+   <canvas id="cT" role="img" aria-label="Gráfica reciente de temperatura"></canvas>
+   <div class="col">
+     <label for="amb">Temperatura ambiente <b id="vAmb"></b></label>
      <input type="range" id="amb" min="0" max="60" step="0.5" value="24">
-    </div>
    </div>
   </section>
 
   <!-- HUMEDAD -->
   <section class="box">
-   <h2>Sensor de humedad</h2>
-   <canvas id="cH"></canvas>
-   <div class="row">
-    <div class="tube" aria-hidden="true"><i id="thH" style="background:#1f6fe0"></i></div>
-    <div class="col">
-     <div class="num" id="nH">0.0 %HR</div>
-     <label>Humedad ambiente <b id="vHum"></b></label>
+   <h2>Humedad</h2>
+   <div class="num" id="nH">— %HR</div>
+   <canvas id="cH" role="img" aria-label="Gráfica reciente de humedad"></canvas>
+   <div class="col">
+     <label for="hum">Humedad ambiente <b id="vHum"></b></label>
      <input type="range" id="hum" min="0" max="100" step="1" value="50">
-    </div>
    </div>
   </section>
 
   <!-- MAGNETICO -->
   <section class="box">
-   <h2>Sensor magnético de puerta</h2>
-   <canvas id="cD"></canvas>
+   <h2>Puerta</h2>
+   <div class="num" id="nD">—</div>
+   <canvas id="cD" role="img" aria-label="Gráfica reciente del estado de la puerta"></canvas>
    <div class="row">
     <div class="door" id="door"><div class="frame"></div><div class="mg f"></div><div class="leaf"><div class="mg d"></div></div></div>
     <div class="col">
-     <div class="num" id="nD" style="font-size:18px">CERRADA</div>
      <div><span class="led g" id="dLed"></span><span id="dTxt">Contacto cerrado (imán alineado)</span></div>
      <button id="tog">Abrir puerta</button>
     </div>
@@ -108,12 +138,12 @@ button:focus-visible,input:focus-visible{outline:2px solid #0a246a;outline-offse
 
   <!-- MOTOR -->
   <section class="box">
-   <h2>Motor con ventilador</h2>
+   <h2>Ventilador</h2>
    <div class="row" style="margin-top:0">
     <svg class="fan" viewBox="-50 -50 100 100" aria-label="Ventilador">
-     <circle r="47" fill="#e9e6df" stroke="#404040" stroke-width="2"/>
-     <g id="rot" fill="#2d5da8" stroke="#143466" stroke-width="1">
-      <path id="b0" d="M0,0 C12,-6 16,-30 3,-43 C-9,-35 -9,-12 0,0Z"/>
+     <circle r="47" fill="#dbe1e9" stroke="#8190a5" stroke-width="2"/>
+     <g id="rot" fill="#38659e" stroke="#173b69" stroke-width="1">
+      <path fill="#74a9eb" d="M0,0 C12,-6 16,-30 3,-43 C-9,-35 -9,-12 0,0Z"/>
       <path d="M0,0 C12,-6 16,-30 3,-43 C-9,-35 -9,-12 0,0Z" transform="rotate(90)"/>
       <path d="M0,0 C12,-6 16,-30 3,-43 C-9,-35 -9,-12 0,0Z" transform="rotate(180)"/>
       <path d="M0,0 C12,-6 16,-30 3,-43 C-9,-35 -9,-12 0,0Z" transform="rotate(270)"/>
@@ -123,7 +153,7 @@ button:focus-visible,input:focus-visible{outline:2px solid #0a246a;outline-offse
     <div class="col">
      <div class="num" id="nR">0 RPM</div>
      <div class="seg"><button id="mAuto" class="on">Auto</button><button id="mMan">Manual</button></div>
-     <label>Velocidad manual <b id="vFan"></b></label>
+     <label for="fan">Velocidad manual <b id="vFan"></b></label>
      <input type="range" id="fan" min="0" max="100" value="0">
      <div><span class="led" id="mLed"></span><span id="mTxt">Motor detenido</span></div>
     </div>
@@ -153,16 +183,16 @@ button:focus-visible,input:focus-visible{outline:2px solid #0a246a;outline-offse
   <!-- UMBRALES -->
   <section class="box">
    <h2>Umbrales de control</h2>
-   <label>Ventilador enciende desde <b id="vOn"></b></label>
+   <label for="tOn">Ventilador enciende desde <b id="vOn"></b></label>
    <input type="range" id="tOn" min="15" max="45" step="0.5" value="28">
-   <label>Alarma por temperatura <b id="vAT"></b></label>
+   <label for="tAl">Alarma por temperatura <b id="vAT"></b></label>
    <input type="range" id="tAl" min="20" max="60" step="0.5" value="38">
-   <label>Alarma por humedad <b id="vAH"></b></label>
+   <label for="hAl">Alarma por humedad <b id="vAH"></b></label>
    <input type="range" id="hAl" min="30" max="100" step="1" value="85">
    <p class="note">En modo Auto el motor sube de velocidad entre el umbral de encendido y 8 °C por encima. Al girar enfría el ambiente simulado.</p>
   </section>
  </div>
-</div>
+</main>
 
 <script>
 const $=id=>document.getElementById(id);
@@ -185,14 +215,14 @@ function draw(cv,d,min,max,thr,step,color){
  const r=window.devicePixelRatio||1,w=cv.clientWidth,h=cv.clientHeight;
  if(cv.width!==Math.round(w*r)||cv.height!==Math.round(h*r)){cv.width=Math.round(w*r);cv.height=Math.round(h*r)}
  const c=cv.getContext('2d');c.setTransform(r,0,0,r,0,0);
- c.fillStyle='#0b130b';c.fillRect(0,0,w,h);
- const L=32,T0=8,B=6,pw=w-L-8,ph=h-T0-B;
- c.lineWidth=1;c.strokeStyle='#1f3a1f';c.fillStyle='#7fbf7f';c.font='10px Consolas,monospace';c.textAlign='right';
+ c.fillStyle='#0c161c';c.fillRect(0,0,w,h);
+ const L=32,T0=12,B=12,pw=w-L-8,ph=h-T0-B;
+ c.lineWidth=1;c.strokeStyle='#283e49';c.fillStyle='#b5cbd5';c.font='11px Consolas,monospace';c.textAlign='right';
  for(let i=0;i<=4;i++){const y=T0+ph*i/4;c.beginPath();c.moveTo(L,y);c.lineTo(L+pw,y);c.stroke();
   c.fillText((max-(max-min)*i/4).toFixed(step?1:0),L-4,y+3)}
  for(let i=0;i<=10;i++){const x=L+pw*i/10;c.beginPath();c.moveTo(x,T0);c.lineTo(x,T0+ph);c.stroke()}
  const Y=v=>T0+ph*(1-(v-min)/(max-min));
- if(thr!=null){c.strokeStyle='#ffd200';c.setLineDash([5,4]);c.beginPath();c.moveTo(L,Y(thr));c.lineTo(L+pw,Y(thr));c.stroke();c.setLineDash([])}
+ if(thr!=null){c.strokeStyle='#f7c35c';c.setLineDash([5,4]);c.beginPath();c.moveTo(L,Y(thr));c.lineTo(L+pw,Y(thr));c.stroke();c.setLineDash([])}
  if(!d.length)return;
  c.strokeStyle=color;c.lineWidth=2;c.beginPath();
  d.forEach((v,i)=>{const x=L+pw*(N-d.length+i)/(N-1),y=Y(v);
@@ -213,13 +243,13 @@ function ui(){
  setSlider('amb',E.simulacion.temperatura_ambiente);setSlider('hum',E.simulacion.humedad_ambiente);
  setSlider('fan',v.velocidad_manual);setSlider('tOn',u.ventilador_on);setSlider('tAl',u.alarma_temperatura);setSlider('hAl',u.alarma_humedad);
  labels();
- $('run').textContent=E.corriendo?'Detener':'Ejecutar';$('run').classList.toggle('on',E.corriendo);
+ $('run').textContent=E.corriendo?'Pausar simulación':'Reanudar simulación';
+ $('run').disabled=false;
+ const estadoSimulacion=E.corriendo?'Simulación en marcha':'Simulación pausada';
+ if($('runStatus').textContent!==estadoSimulacion)$('runStatus').textContent=estadoSimulacion;
  $('runLed').className='led '+(E.corriendo?'g':'');
  $('nT').textContent=t.toFixed(1)+' °C';$('nH').textContent=h.toFixed(1)+' %HR';
- $('thT').style.height=Math.max(0,Math.min(100,t/60*100))+'%';
- $('thT').style.background=t>=u.alarma_temperatura?'#d41c1c':t>=u.ventilador_on?'#ff9d00':'#e86a00';
- $('thH').style.height=Math.max(0,Math.min(100,h))+'%';
- $('nD').textContent=ab?'ABIERTA':'CERRADA';
+ $('nD').textContent=ab?'Abierta':'Cerrada';
  $('door').classList.toggle('open',ab);
  $('dLed').className='led '+(ab?'r':'g');
  $('dTxt').textContent=ab?'Contacto abierto (imán separado)':'Contacto cerrado (imán alineado)';
@@ -237,12 +267,17 @@ function ui(){
 }
 function render(){
  if(!E)return;
- draw($('cT'),D.t,0,60,E.umbrales.alarma_temperatura,1,'#39ff5a');
- draw($('cH'),D.h,0,100,E.umbrales.alarma_humedad,0,'#4db8ff');
- draw($('cD'),D.d,-0.1,1.2,null,1,'#ffb347');
+ draw($('cT'),D.t,0,60,E.umbrales.alarma_temperatura,1,'#70ee93');
+ draw($('cH'),D.h,0,100,E.umbrales.alarma_humedad,0,'#68bafa');
+ draw($('cD'),D.d,-0.1,1.2,null,1,'#f6ad67');
 }
 async function sondear(graf=true){
- try{E=await api('/estado')}catch(e){$('clock').textContent='Sin conexión con la API';return}
+ try{E=await api('/estado')}catch(e){
+  if($('runStatus').textContent!=='Sin conexión con la API')$('runStatus').textContent='Sin conexión con la API';
+  $('runLed').className='led r';
+  $('run').disabled=true;
+  return;
+ }
  if(graf&&E.corriendo){push(D.t,E.sensores.temperatura.valor);push(D.h,E.sensores.humedad.valor);push(D.d,E.sensores.puerta.abierta?1:0);
   tickN++;if(E.actuadores.alarma.activa)beep(tickN%2?880:660)}
  $('clock').textContent=new Date().toLocaleTimeString('es-CO',{hour12:false});
