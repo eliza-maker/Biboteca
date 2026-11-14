@@ -1,6 +1,6 @@
 # Demo de Biboteca en Raspberry Pi
 
-La Raspberry ejecuta la API con el simulador y el bot de Telegram. El panel usa la misma API. Para esta demo basta una Raspberry con Raspberry Pi OS, conexión a internet y acceso por SSH desde el PC.
+La Raspberry ejecuta la API y el bot de Telegram. El modo predeterminado usa el panel y el simulador. Para probar el sensor físico, sigue la sección 5.
 
 ## 1. Preparar la Raspberry
 
@@ -71,3 +71,24 @@ En Windows, abre [el panel por el túnel](http://127.0.0.1:8080/) y haz estas co
 3. Toca **Automático** en el bot. El panel debe volver a **Auto**. Abre la puerta simulada desde el panel y pide `/estado` para comprobar que Telegram también la muestra abierta.
 
 Si el panel no abre desde Windows, comprueba que la API y el túnel sigan activos. Si el bot informa un conflicto de Telegram, comprueba que no haya otra instancia con el mismo token. Si informa que no pudo consultar el estado, revisa que la API esté ejecutándose en la Raspberry. Para terminar la demo, pulsa `Ctrl+C` en cada sesión.
+
+## 5. Cambiar al DHT11 físico en la Raspberry Pi 3
+
+Apaga la Raspberry antes de conectar el DHT11. Usa los números físicos del conector de 40 pines de la Raspberry.
+
+| DHT11 | Raspberry Pi 3 |
+| --- | --- |
+| VCC | 3,3 V, pin físico 1 |
+| DATA | BCM GPIO4, pin físico 7 |
+| GND | Tierra, pin físico 6 |
+
+Si el sensor viene sin resistencia pull-up, conecta una de 4,7 a 10 kΩ entre DATA y 3,3 V. Para un módulo de tres pines, sigue las etiquetas impresas en el módulo. En el sensor de cuatro patas, deja NC sin conectar. [Cableado del DHT11](https://learn.adafruit.com/dht-humidity-sensing-on-raspberry-pi-with-gdocs-logging)
+
+En la Raspberry, desde la carpeta del proyecto y con el entorno virtual de la sección 2 creado, instala las dependencias del GPIO y del DHT11. [Instalación de Blinka en Raspberry Pi](https://learn.adafruit.com/circuitpython-on-raspberrypi-linux/installing-circuitpython-on-raspberry-pi)
+
+```bash
+sudo apt install libgpiod-dev python3-libgpiod
+.venv/bin/python -m pip install adafruit-blinka adafruit-circuitpython-dht
+```
+
+En `backend/domotica/api.py`, cambia `html: bool = True` por `html: bool = False` y reinicia la API con el comando de la sección 3. Arranca el bot actualizado y envía `/estado`, `/temperatura` o `/humedad`. El DHT11 se consulta cada dos segundos. Si falla una lectura, el bot mostrará «sin lectura del DHT11» hasta recibir una muestra válida. El modo físico ofrece temperatura y humedad. El panel, la puerta, el ventilador y la alarma están disponibles en modo simulación.
