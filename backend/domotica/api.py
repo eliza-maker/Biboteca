@@ -1,15 +1,17 @@
-"""API REST de domótica (simulada). Ejecutar con: python api.py
-
-El servidor es la única fuente de verdad: simula los sensores, aplica la lógica de los
-actuadores y expone una URL por variable y por actuador. El panel HTML y el bot de
-Telegram consultan/modifican lo mismo a través de estas URLs.
-"""
+"""API REST de domótica para el panel simulado o el DHT11 de la Raspberry Pi."""
 from pathlib import Path
 import random
 import threading
 import time
 
 from flask import Flask, abort, jsonify, request, send_from_directory
+
+if __package__:
+    from .hardware import Hardware
+else:
+    from hardware import Hardware
+
+html: bool = True  # True: simulación HTML. False: DHT11 en la Raspberry Pi.
 
 app = Flask(__name__, static_folder="static")
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
@@ -18,8 +20,8 @@ MAX_RPM = 3000
 
 ST = {
     "corriendo": True,
-    "temperatura": 24.0,
-    "humedad": 50.0,
+    "temperatura": 24.0 if html else None,
+    "humedad": 50.0 if html else None,
     "puerta_abierta": False,
     # Entradas de la simulación (el "mundo físico"). Con sensores reales se reemplazan.
     "sim": {"temperatura_ambiente": 24.0, "humedad_ambiente": 50.0},
@@ -68,13 +70,29 @@ def _simular():
             a["activa"] = bool(causas) and not a["silenciada"]
 
 
+def _leer_hardware(hardware):
+    """Actualiza ambas lecturas juntas y reintenta los fallos del DHT11."""
+    while True:
+        try:
+            temperatura, humedad = hardware.leer_dht11()
+        except (RuntimeError, OSError) as error:
+            app.logger.warning("No se pudo leer el DHT11: %s", error)
+            temperatura, humedad = None, None
+        with lock:
+            ST["temperatura"] = temperatura
+            ST["humedad"] = humedad
+        time.sleep(2)
+
+
 # --------------------------------------------------------------------- vistas
 def v_temperatura():
-    return {"valor": round(ST["temperatura"], 1), "unidad": "°C"}
+    valor = ST["temperatura"]
+    return {"valor": None if valor is None else round(valor, 1), "unidad": "°C"}
 
 
 def v_humedad():
-    return {"valor": round(ST["humedad"], 1), "unidad": "%HR"}
+    valor = ST["humedad"]
+    return {"valor": None if valor is None else round(valor, 1), "unidad": "%HR"}
 
 
 def v_puerta():
@@ -95,6 +113,11 @@ def v_alarma():
 
 
 def estado():
+    if not html:
+        return {
+            "modo": "hardware",
+            "sensores": {"temperatura": v_temperatura(), "humedad": v_humedad()},
+        }
     return {
         "corriendo": ST["corriendo"],
         "sensores": {"temperatura": v_temperatura(), "humedad": v_humedad(), "puerta": v_puerta()},
@@ -139,6 +162,15 @@ def _cors(r):  # permite abrir el HTML desde otro origen (p. ej. Live Server)
 
 
 # ------------------------------------------------------------------ endpoints
+@app.before_request
+def limitar_rutas_hardware():
+    if not html and (
+        request.path in ("/", "/api/sensores/puerta", "/api/umbrales")
+        or request.path.startswith(("/api/simulacion/", "/api/actuadores/"))
+    ):
+        return jsonify(error="Ruta disponible solo en modo simulación."), 404
+
+
 @app.get("/")
 def panel():
     return send_from_directory(FRONTEND_DIR, "panel-sensores.html")
@@ -146,6 +178,9 @@ def panel():
 
 @app.get("/api")
 def indice():
+    if not html:
+        return jsonify(lectura=["/api/estado", "/api/sensores/temperatura", "/api/sensores/humedad"],
+                       escritura=[])
     return jsonify(
         lectura=["/api/estado", "/api/sensores/temperatura", "/api/sensores/humedad",
                  "/api/sensores/puerta", "/api/actuadores/ventilador", "/api/actuadores/alarma",
@@ -280,5 +315,10 @@ def sim_ejecucion():
 
 
 if __name__ == "__main__":
-    threading.Thread(target=_simular, daemon=True).start()
+    if html:
+        trabajador = threading.Thread(target=_simular, daemon=True)
+    else:
+        hardware = Hardware()
+        trabajador = threading.Thread(target=_leer_hardware, args=(hardware,), daemon=True)
+    trabajador.start()
     app.run(host="127.0.0.1", port=5000, threaded=True)

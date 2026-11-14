@@ -79,13 +79,18 @@ def obtener_estado():
 
 # ------------------------------------------------- textos listos para Telegram
 def texto_temperatura():
-    d = obtener_temperatura()
-    return f"🌡️ Temperatura: {d['valor']} {d['unidad']}"
+    return _formatear_lectura("🌡️ Temperatura", obtener_temperatura())
 
 
 def texto_humedad():
-    d = obtener_humedad()
-    return f"💧 Humedad: {d['valor']} {d['unidad']}"
+    return _formatear_lectura("💧 Humedad", obtener_humedad())
+
+
+def _formatear_lectura(etiqueta, lectura):
+    valor = lectura["valor"]
+    if valor is None:
+        return f"{etiqueta}: sin lectura del DHT11"
+    return f"{etiqueta}: {valor:.1f} {lectura['unidad']}"
 
 
 def texto_puerta():
@@ -122,15 +127,19 @@ def _formatear_alarma(d):
 def texto_estado():
     estado = obtener_estado()
     sensores = estado["sensores"]
+    lecturas = [
+        _formatear_lectura("🌡️ Temperatura", sensores["temperatura"]),
+        _formatear_lectura("💧 Humedad", sensores["humedad"]),
+    ]
+    if estado.get("modo") == "hardware":
+        return "\n".join(["📚 Estado de Biboteca", "Raspberry Pi · DHT11", *lecturas])
+
     actuadores = estado["actuadores"]
-    temperatura = sensores["temperatura"]
-    humedad = sensores["humedad"]
     simulacion = "en ejecución" if estado["corriendo"] else "pausada"
     return "\n".join([
         "📚 Estado de Biboteca",
         f"🧪 Simulación {simulacion}",
-        f"🌡️ Temperatura: {temperatura['valor']:.1f} {temperatura['unidad']}",
-        f"💧 Humedad: {humedad['valor']:.1f} {humedad['unidad']}",
+        *lecturas,
         f"🚪 Puerta: {sensores['puerta']['estado']}",
         _formatear_ventilador(actuadores["ventilador"]),
         _formatear_alarma(actuadores["alarma"]),

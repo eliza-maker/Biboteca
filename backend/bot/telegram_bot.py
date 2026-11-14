@@ -61,11 +61,15 @@ def enviar_mensaje(texto, teclado=None):
     consultar_api("sendMessage", contenido)
 
 
-def obtener_estado():
+def consultar_lectura(funcion):
     try:
-        return dom.texto_estado()
+        return funcion()
     except requests.RequestException:
-        return "⚠️ No pude consultar el estado de Biboteca. Comprueba que la API esté en ejecución."
+        return "⚠️ No pude consultar Biboteca. Comprueba que la API esté en ejecución."
+
+
+def obtener_estado():
+    return consultar_lectura(dom.texto_estado)
 
 
 def responder_control(comando, argumentos):
@@ -75,6 +79,10 @@ def responder_control(comando, argumentos):
         if argumentos:
             return f"⚠️ Usa {comando} sin argumentos."
         return dom.cambiar_modo_ventilador("manual" if comando == "/manual" else "auto")
+    except requests.HTTPError as error:
+        if error.response.status_code == 404:
+            return "⚠️ El control del ventilador está disponible en modo simulación."
+        return "⚠️ La API rechazó la solicitud del ventilador."
     except requests.RequestException:
         return "⚠️ No pude confirmar la solicitud del ventilador. Comprueba que la API esté en ejecución."
 
@@ -87,6 +95,10 @@ def responder_mensaje(texto):
     comando, *argumentos = texto.split()
     if texto == BOTON_ESTADO.lower() or texto == "/estado":
         enviar_mensaje(obtener_estado())
+    elif texto == "/temperatura":
+        enviar_mensaje(consultar_lectura(dom.texto_temperatura))
+    elif texto == "/humedad":
+        enviar_mensaje(consultar_lectura(dom.texto_humedad))
     elif texto == BOTON_VENTILADOR.lower():
         estado = responder_control("/ventilador", [])
         enviar_mensaje(
@@ -105,8 +117,8 @@ def responder_mensaje(texto):
         enviar_mensaje("📚 Biboteca\nConsulta el estado de la biblioteca o ajusta el ventilador.", MENU_PRINCIPAL)
     elif texto in ("/ayuda", BOTON_AYUDA.lower()):
         enviar_mensaje(
-            "📋 Estado muestra las lecturas, la puerta y la alarma.\n"
-            "🌀 Ventilador permite cambiar el modo y elegir una velocidad. "
+            "📋 Estado muestra las lecturas. También puedes usar /temperatura y /humedad.\n"
+            "🌀 En simulación, el menú Ventilador permite cambiar el modo y elegir una velocidad. "
             "Para usar un porcentaje que no aparece en los botones, toca Manual y escribe, por ejemplo, /ventilador 45.",
             MENU_PRINCIPAL,
         )
