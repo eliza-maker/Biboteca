@@ -11,7 +11,7 @@ if __package__:
 else:
     from hardware import Hardware
 
-html: bool = True  # True: simulación HTML. False: DHT11 en la Raspberry Pi.
+html: bool = False  # True: simulación HTML. False: DHT11 en la Raspberry Pi.
 
 app = Flask(__name__, static_folder="static")
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
