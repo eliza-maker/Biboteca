@@ -8,7 +8,7 @@ class Hardware:
         import board
 
         # DATA en BCM GPIO4 (pin físico 7 del conector de 40 pines).
-        self._dht = adafruit_dht.DHT11(board.D4, use_pulseio=False)
+        self._dht = adafruit_dht.DHT11(board.D4)
 
     def leer_dht11(self):
         """Devuelve temperatura en °C y humedad relativa en %, de la misma muestra."""
@@ -18,3 +18,7 @@ class Hardware:
                 or not isfinite(temperatura) or not 0 <= humedad <= 100):
             raise RuntimeError("Lectura inválida del DHT11")
         return temperatura, humedad
+
+    def cerrar(self):
+        """Libera los recursos de captura del sensor."""
+        self._dht.exit()

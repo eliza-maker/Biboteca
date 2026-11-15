@@ -93,4 +93,4 @@ sudo apt install libgpiod-dev python3-libgpiod
 
 Inicia la API con el comando de la sección 3 y abre el panel como se indica en la sección 4. La API arranca en simulación. Pulsa **Usar DHT11** para pasar al modo físico y **Volver a simulación** para regresar. El cambio vale para el panel y para Telegram y dura hasta que se reinicia la API.
 
-Arranca el bot y envía `/estado`, `/temperatura` o `/humedad`. Si falla una lectura, el panel y el bot indican que el sensor está sin lectura hasta recibir una muestra válida. En modo físico, el panel muestra temperatura y humedad. La puerta, el ventilador y la alarma están disponibles en modo simulación.
+Arranca el bot y envía `/estado`, `/temperatura` o `/humedad`. La API toma una muestra del DHT11 cada dos segundos como mínimo y publica el promedio de cada grupo de cuatro muestras válidas. El panel y el bot muestran «sin lectura» al activar el modo físico o si falla un intento, hasta que se completa el grupo. La puerta, el ventilador y la alarma están disponibles en modo simulación.
