@@ -17,8 +17,10 @@ app = Flask(__name__, static_folder="static")
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
 lock = threading.Lock()
 MAX_RPM = 3000
+MUESTRAS_POR_PROMEDIO = 4
 hardware = None
-lecturas_dht = (None, None)
+muestras_dht = []
+promedio_dht = (None, None)
 
 ST = {
     "corriendo": True,
@@ -69,31 +71,50 @@ def _simular():
     a["activa"] = bool(causas) and not a["silenciada"]
 
 
-def _actualizar_sensores():
-    global lecturas_dht
+def _actualizar_sensores(detener):
+    global promedio_dht
     proxima_lectura = 0.0
-    while True:
+    while not detener.is_set():
         with lock:
             if html:
                 _simular()
             elif time.monotonic() >= proxima_lectura:
                 try:
-                    lecturas_dht = hardware.leer_dht11()
+                    muestras_dht.append(hardware.leer_dht11())
                 except (RuntimeError, OSError) as error:
                     app.logger.warning("No se pudo leer el DHT11: %s", error)
-                    lecturas_dht = (None, None)
+                    promedio_dht = (None, None)
+                if len(muestras_dht) == MUESTRAS_POR_PROMEDIO:
+                    temperaturas, humedades = zip(*muestras_dht)
+                    promedio_dht = (
+                        sum(temperaturas) / MUESTRAS_POR_PROMEDIO,
+                        sum(humedades) / MUESTRAS_POR_PROMEDIO,
+                    )
+                    muestras_dht.clear()
                 proxima_lectura = time.monotonic() + 2
-        time.sleep(0.2)
+        detener.wait(0.2)
+
+
+def _cerrar_hardware():
+    """Libera el lector con el estado bloqueado."""
+    global hardware
+    if hardware is not None:
+        try:
+            hardware.cerrar()
+        except (RuntimeError, OSError) as error:
+            app.logger.warning("No se pudo cerrar el DHT11: %s", error)
+        finally:
+            hardware = None
 
 
 # --------------------------------------------------------------------- vistas
 def v_temperatura():
-    valor = ST["temperatura"] if html else lecturas_dht[0]
+    valor = ST["temperatura"] if html else promedio_dht[0]
     return {"valor": None if valor is None else round(valor, 1), "unidad": "°C"}
 
 
 def v_humedad():
-    valor = ST["humedad"] if html else lecturas_dht[1]
+    valor = ST["humedad"] if html else promedio_dht[1]
     return {"valor": None if valor is None else round(valor, 1), "unidad": "%HR"}
 
 
@@ -177,7 +198,7 @@ def _requiere_simulacion():
 
 @app.put("/api/modo")
 def put_modo():
-    global html, hardware, lecturas_dht
+    global html, hardware, promedio_dht
     activar_html = _bool(_json(), "html")
     with lock:
         if not activar_html and hardware is None:
@@ -187,8 +208,11 @@ def put_modo():
                 app.logger.warning("No se pudo inicializar el DHT11: %s", error)
                 return jsonify(error=f"No se pudo inicializar el DHT11: {error}"), 503
         if html != activar_html:
+            if activar_html:
+                _cerrar_hardware()
             html = activar_html
-            lecturas_dht = (None, None)
+            muestras_dht.clear()
+            promedio_dht = (None, None)
         return jsonify(estado())
 
 
@@ -349,5 +373,13 @@ def sim_ejecucion():
 if __name__ == "__main__":
     if not html:
         hardware = Hardware()
-    threading.Thread(target=_actualizar_sensores, daemon=True).start()
-    app.run(host="127.0.0.1", port=5000, threaded=True)
+    detener = threading.Event()
+    trabajador = threading.Thread(target=_actualizar_sensores, args=(detener,), daemon=True)
+    trabajador.start()
+    try:
+        app.run(host="127.0.0.1", port=5000, threaded=True)
+    finally:
+        detener.set()
+        trabajador.join()
+        with lock:
+            _cerrar_hardware()
