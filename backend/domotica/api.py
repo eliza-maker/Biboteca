@@ -11,14 +11,14 @@ if __package__:
 else:
     from hardware import Hardware
 
-html: bool = True  # True: simulación HTML. False: DHT11 en la Raspberry Pi.
+html: bool = False  # True: simulación HTML. False: DHT11 en la Raspberry Pi.
 
 app = Flask(__name__, static_folder="static")
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
 lock = threading.Lock()
 MAX_RPM = 3000
 MUESTRAS_POR_PROMEDIO = 4
-hardware = None
+# hardware = None
 muestras_dht = []
 promedio_dht = (None, None)
 
@@ -74,25 +74,8 @@ def _simular():
 def _actualizar_sensores(detener):
     global promedio_dht
     proxima_lectura = 0.0
-    while not detener.is_set():
-        with lock:
-            if html:
-                _simular()
-            elif time.monotonic() >= proxima_lectura:
-                try:
-                    muestras_dht.append(hardware.leer_dht11())
-                except (RuntimeError, OSError) as error:
-                    app.logger.warning("No se pudo leer el DHT11: %s", error)
-                    promedio_dht = (None, None)
-                if len(muestras_dht) == MUESTRAS_POR_PROMEDIO:
-                    temperaturas, humedades = zip(*muestras_dht)
-                    promedio_dht = (
-                        sum(temperaturas) / MUESTRAS_POR_PROMEDIO,
-                        sum(humedades) / MUESTRAS_POR_PROMEDIO,
-                    )
-                    muestras_dht.clear()
-                proxima_lectura = time.monotonic() + 2
-        detener.wait(0.2)
+    tem, hum = hardware.leer_dht11()
+    print (f"tem: {tem} , hum: {hum}")
 
 
 def _cerrar_hardware():
