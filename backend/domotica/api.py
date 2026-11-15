@@ -77,6 +77,10 @@ def _actualizar_sensores(detener):
     tem, hum = hardware.leer_dht11()
     print (f"tem: {tem} , hum: {hum}")
 
+def alerta_puerta_abierta():
+    app.logger.warning("Alerta: la puerta se ha abierto.")
+hardware = Hardware(al_abrir_puerta=alerta_puerta_abierta)
+
 
 def _cerrar_hardware():
     """Libera el lector con el estado bloqueado."""
