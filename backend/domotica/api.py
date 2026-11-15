@@ -18,7 +18,7 @@ FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
 lock = threading.Lock()
 MAX_RPM = 3000
 MUESTRAS_POR_PROMEDIO = 4
-# hardware = None
+hardware = None
 muestras_dht = []
 promedio_dht = (None, None)
 
@@ -72,11 +72,11 @@ def _simular():
 
 
 def _actualizar_sensores(detener):
-    print("Promedio DHT11 (temperatura, humedad):", hardware.leer_dht11())
+    print("DHT11: iniciando cinco intentos de lectura.", flush=True)
+    print("Promedio DHT11 (temperatura, humedad):", hardware.leer_dht11(), flush=True)
 
 def alerta_puerta_abierta():
     app.logger.warning("Alerta: la puerta se ha abierto.")
-hardware = Hardware()
 
 
 def _cerrar_hardware():

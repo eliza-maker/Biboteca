@@ -20,10 +20,7 @@ class Hardware:
                 if temperatura is not None and humedad is not None:
                     muestras.append((temperatura, humedad))
             except RuntimeError as error:
-                print(f"Error de lectura: {error}")
-            except Exception:
-                self._dht.exit()
-                raise
+                print(f"Error de lectura: {error}", flush=True)
 
             if intento < 4:
                 time.sleep(2.0)
@@ -36,7 +33,12 @@ class Hardware:
                 
     def cerrar(self):
         """Libera los recursos de captura del sensor."""
-        self._dht.exit()
+        try:
+            self._dht.exit()
+        finally:
+            switch = getattr(self, "_switch", None)
+            if switch is not None:
+                switch.close()
 
     def _init_(self, al_abrir_puerta=None):
         self._switch = Button(3, pull_up=True, bounce_time=0.1)
@@ -44,6 +46,3 @@ class Hardware:
         # Asignamos el evento a una función externa
         if al_abrir_puerta:
             self._switch.when_released = al_abrir_puerta
-            
-    def cerrar(self):
-        self._switch.close()
