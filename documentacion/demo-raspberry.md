@@ -91,4 +91,6 @@ sudo apt install libgpiod-dev python3-libgpiod
 .venv/bin/python -m pip install adafruit-blinka adafruit-circuitpython-dht
 ```
 
-En `backend/domotica/api.py`, cambia `html: bool = True` por `html: bool = False` y reinicia la API con el comando de la sección 3. Arranca el bot actualizado y envía `/estado`, `/temperatura` o `/humedad`. El DHT11 se consulta cada dos segundos. Si falla una lectura, el bot mostrará «sin lectura del DHT11» hasta recibir una muestra válida. El modo físico ofrece temperatura y humedad. El panel, la puerta, el ventilador y la alarma están disponibles en modo simulación.
+Inicia la API con el comando de la sección 3 y abre el panel como se indica en la sección 4. La API arranca en simulación. Pulsa **Usar DHT11** para pasar al modo físico y **Volver a simulación** para regresar. El cambio vale para el panel y para Telegram y dura hasta que se reinicia la API.
+
+Arranca el bot y envía `/estado`, `/temperatura` o `/humedad`. Si falla una lectura, el panel y el bot indican que el sensor está sin lectura hasta recibir una muestra válida. En modo físico, el panel muestra temperatura y humedad. La puerta, el ventilador y la alarma están disponibles en modo simulación.

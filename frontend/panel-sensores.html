@@ -16,6 +16,7 @@
  font-family: "Segoe UI", Tahoma, sans-serif;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--panel); color: var(--ink); font-size: 14px; line-height: 1.5; }
 .win { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; }
 .title {
@@ -93,19 +94,21 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blue); outl
  <div class="bar">
   <span class="status"><span class="led" id="runLed" aria-hidden="true"></span><span id="runStatus" role="status">Conectando con la API</span></span>
   <div class="actions">
-   <label><input type="checkbox" id="snd"> Sonido de alarma</label>
+   <label data-simulacion><input type="checkbox" id="snd"> Sonido de alarma</label>
    <button id="reset" type="button">Borrar gráficas</button>
-   <button id="run" type="button" disabled>Pausar simulación</button>
+   <button id="run" data-simulacion type="button" disabled>Pausar simulación</button>
+   <button id="modo" type="button" disabled>Usar DHT11</button>
   </div>
  </div>
 
+ <p id="modoError" class="note" role="alert" hidden></p>
  <div class="grid">
   <!-- TEMPERATURA -->
   <section class="box">
    <h2>Temperatura</h2>
    <div class="num" id="nT">— °C</div>
    <canvas id="cT" role="img" aria-label="Gráfica reciente de temperatura"></canvas>
-   <div class="col">
+   <div class="col" data-simulacion>
      <label for="amb">Temperatura ambiente <b id="vAmb"></b></label>
      <input type="range" id="amb" min="0" max="60" step="0.5" value="24">
    </div>
@@ -116,14 +119,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blue); outl
    <h2>Humedad</h2>
    <div class="num" id="nH">— %HR</div>
    <canvas id="cH" role="img" aria-label="Gráfica reciente de humedad"></canvas>
-   <div class="col">
+   <div class="col" data-simulacion>
      <label for="hum">Humedad ambiente <b id="vHum"></b></label>
      <input type="range" id="hum" min="0" max="100" step="1" value="50">
    </div>
   </section>
 
   <!-- MAGNETICO -->
-  <section class="box">
+  <section class="box" data-simulacion>
    <h2>Puerta</h2>
    <div class="num" id="nD">—</div>
    <canvas id="cD" role="img" aria-label="Gráfica reciente del estado de la puerta"></canvas>
@@ -137,7 +140,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blue); outl
   </section>
 
   <!-- MOTOR -->
-  <section class="box">
+  <section class="box" data-simulacion>
    <h2>Ventilador</h2>
    <div class="row" style="margin-top:0">
     <svg class="fan" viewBox="-50 -50 100 100" aria-label="Ventilador">
@@ -161,7 +164,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blue); outl
   </section>
 
   <!-- ALARMA -->
-  <section class="box" id="alBox">
+  <section class="box" id="alBox" data-simulacion>
    <h2>Alarma</h2>
    <div class="row" style="margin-top:0">
     <svg class="siren" viewBox="0 0 100 100" aria-label="Sirena">
@@ -181,7 +184,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blue); outl
   </section>
 
   <!-- UMBRALES -->
-  <section class="box">
+  <section class="box" data-simulacion>
    <h2>Umbrales de control</h2>
    <label for="tOn">Ventilador enciende desde <b id="vOn"></b></label>
    <input type="range" id="tOn" min="15" max="45" step="0.5" value="28">
@@ -199,12 +202,17 @@ const $=id=>document.getElementById(id);
 // Vacío = la página la sirve la misma API (http://127.0.0.1:5000). Si abres el HTML por separado: 'http://127.0.0.1:5000'
 const API='';
 const N=150;
+const controlesSimulacion=document.querySelectorAll("[data-simulacion]");
+let cambiandoModo=false,sondeoEnCurso=false,cambiosModo=0;
 const D={t:[],h:[],d:[]};
 let E=null,ang=0,last=performance.now(),ac=null,tickN=0;
 
 async function api(ruta,metodo='GET',cuerpo){
  const r=await fetch(API+'/api'+ruta,{method:metodo,headers:{'Content-Type':'application/json'},body:cuerpo?JSON.stringify(cuerpo):undefined});
- if(!r.ok)throw new Error(r.status);
+ if(!r.ok){
+  const datos=await r.json().catch(()=>({}));
+  throw new Error(datos.error||('HTTP '+r.status));
+ }
  return r.json();
 }
 const enviar=(ruta,cuerpo)=>api(ruta,'PUT',cuerpo).then(()=>sondear(false)).catch(()=>{});
@@ -239,7 +247,20 @@ function labels(){
  $('vAT').textContent=(+$('tAl').value).toFixed(1)+' °C';$('vAH').textContent=$('hAl').value+' %';
 }
 function ui(){
- const s=E.sensores,v=E.actuadores.ventilador,a=E.actuadores.alarma,u=E.umbrales,t=s.temperatura.valor,h=s.humedad.valor,ab=s.puerta.abierta;
+ const s=E.sensores,t=s.temperatura.valor,h=s.humedad.valor;
+ const fisico=E.modo==='hardware';
+ controlesSimulacion.forEach(el=>{el.hidden=fisico});
+ $('modo').textContent=fisico?'Volver a simulación':'Usar DHT11';
+ $('modo').disabled=cambiandoModo;
+ $('nT').textContent=t===null?'Sin lectura':t.toFixed(1)+' °C';
+ $('nH').textContent=h===null?'Sin lectura':h.toFixed(1)+' %HR';
+ if(fisico){
+  const estadoSensor=t===null?'DHT11 · sin lectura':'DHT11 · sensor físico';
+  if($('runStatus').textContent!==estadoSensor)$('runStatus').textContent=estadoSensor;
+  $('runLed').className=t===null?'led o':'led g';
+  return;
+ }
+ const v=E.actuadores.ventilador,a=E.actuadores.alarma,u=E.umbrales,ab=s.puerta.abierta;
  setSlider('amb',E.simulacion.temperatura_ambiente);setSlider('hum',E.simulacion.humedad_ambiente);
  setSlider('fan',v.velocidad_manual);setSlider('tOn',u.ventilador_on);setSlider('tAl',u.alarma_temperatura);setSlider('hAl',u.alarma_humedad);
  labels();
@@ -248,7 +269,6 @@ function ui(){
  const estadoSimulacion=E.corriendo?'Simulación en marcha':'Simulación pausada';
  if($('runStatus').textContent!==estadoSimulacion)$('runStatus').textContent=estadoSimulacion;
  $('runLed').className='led '+(E.corriendo?'g':'');
- $('nT').textContent=t.toFixed(1)+' °C';$('nH').textContent=h.toFixed(1)+' %HR';
  $('nD').textContent=ab?'Abierta':'Cerrada';
  $('door').classList.toggle('open',ab);
  $('dLed').className='led '+(ab?'r':'g');
@@ -267,25 +287,58 @@ function ui(){
 }
 function render(){
  if(!E)return;
- draw($('cT'),D.t,0,60,E.umbrales.alarma_temperatura,1,'#70ee93');
- draw($('cH'),D.h,0,100,E.umbrales.alarma_humedad,0,'#68bafa');
- draw($('cD'),D.d,-0.1,1.2,null,1,'#f6ad67');
+ draw($('cT'),D.t,0,60,E.umbrales?.alarma_temperatura,1,'#70ee93');
+ draw($('cH'),D.h,0,100,E.umbrales?.alarma_humedad,0,'#68bafa');
+ if(E.modo!=='hardware')draw($('cD'),D.d,-0.1,1.2,null,1,'#f6ad67');
 }
-async function sondear(graf=true){
- try{E=await api('/estado')}catch(e){
-  if($('runStatus').textContent!=='Sin conexión con la API')$('runStatus').textContent='Sin conexión con la API';
-  $('runLed').className='led r';
-  $('run').disabled=true;
-  return;
+function mostrarEstado(estado,graf){
+ if(E?.modo!==estado.modo){D.t=[];D.h=[];D.d=[]}
+ E=estado;
+ if(graf&&(E.corriendo||E.modo==='hardware')){
+  const t=E.sensores.temperatura.valor,h=E.sensores.humedad.valor;
+  if(t!==null&&h!==null){push(D.t,t);push(D.h,h)}
+  if(E.modo!=='hardware'){
+   push(D.d,E.sensores.puerta.abierta?1:0);
+   tickN++;if(E.actuadores.alarma.activa)beep(tickN%2?880:660);
+  }
  }
- if(graf&&E.corriendo){push(D.t,E.sensores.temperatura.valor);push(D.h,E.sensores.humedad.valor);push(D.d,E.sensores.puerta.abierta?1:0);
-  tickN++;if(E.actuadores.alarma.activa)beep(tickN%2?880:660)}
  $('clock').textContent=new Date().toLocaleTimeString('es-CO',{hour12:false});
  ui();render();
 }
+async function sondear(graf=true){
+ if(cambiandoModo||sondeoEnCurso)return;
+ sondeoEnCurso=true;
+ const cambio=cambiosModo;
+ try{
+  const estado=await api('/estado');
+  if(cambio===cambiosModo)mostrarEstado(estado,graf);
+ }catch(e){
+  if(cambio!==cambiosModo)return;
+  $('runStatus').textContent='Sin conexión con la API';
+  $('runLed').className='led r';
+  $('run').disabled=true;
+  $('modo').disabled=true;
+ }finally{sondeoEnCurso=false}
+}
+$('modo').onclick=async()=>{
+ if(!E||cambiandoModo)return;
+ cambiandoModo=true;
+ cambiosModo++;
+ $('modo').disabled=true;
+ $('modoError').hidden=true;
+ try{
+  mostrarEstado(await api('/modo','PUT',{html:E.modo==='hardware'}),false);
+ }catch(e){
+  $('modoError').textContent=e.message;
+  $('modoError').hidden=false;
+ }finally{
+  cambiandoModo=false;
+  $('modo').disabled=false;
+ }
+};
 function spin(now){
  const dt=(now-last)/1000;last=now;
- if(E){ang=(ang+E.actuadores.ventilador.rpm/60*360*dt*0.12)%360;$('rot').setAttribute('transform','rotate('+ang.toFixed(1)+')')}
+ if(E?.actuadores){ang=(ang+E.actuadores.ventilador.rpm/60*360*dt*0.12)%360;$('rot').setAttribute('transform','rotate('+ang.toFixed(1)+')')}
  requestAnimationFrame(spin);
 }
 
