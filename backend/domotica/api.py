@@ -11,17 +11,21 @@ if __package__:
 else:
     from hardware import Hardware
 
-html: bool = False  # True: simulación HTML. False: DHT11 en la Raspberry Pi.
+html: bool = True  # True: simulación HTML. False: DHT11 en la Raspberry Pi.
 
 app = Flask(__name__, static_folder="static")
 FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
 lock = threading.Lock()
 MAX_RPM = 3000
+MUESTRAS_POR_PROMEDIO = 4
+hardware = None
+muestras_dht = []
+promedio_dht = (None, None)
 
 ST = {
     "corriendo": True,
-    "temperatura": 24.0 if html else None,
-    "humedad": 50.0 if html else None,
+    "temperatura": 24.0,
+    "humedad": 50.0,
     "puerta_abierta": False,
     # Entradas de la simulación (el "mundo físico"). Con sensores reales se reemplazan.
     "sim": {"temperatura_ambiente": 24.0, "humedad_ambiente": 50.0},
@@ -34,64 +38,83 @@ LIMITES = {"ventilador_on": (15, 45), "alarma_temperatura": (20, 60), "alarma_hu
 
 # ---------------------------------------------------------------- simulación
 def _simular():
-    """Hilo que avanza el sistema cada 0.2 s: sensores -> motor -> alarma."""
-    while True:
-        time.sleep(0.2)
+    """Avanza un paso de la simulación con el estado bloqueado."""
+    if not ST["corriendo"]:
+        return
+    s, v, u, a = ST["sim"], ST["ventilador"], ST["umbrales"], ST["alarma"]
+    enfria = v["rpm"] / MAX_RPM * 8  # el ventilador enfría el ambiente
+    ST["temperatura"] += (s["temperatura_ambiente"] - enfria - ST["temperatura"]) * 0.06 \
+        + random.uniform(-0.15, 0.15)
+    ST["humedad"] += (s["humedad_ambiente"] - ST["humedad"]) * 0.08 + random.uniform(-0.4, 0.4)
+    ST["humedad"] = min(100.0, max(0.0, ST["humedad"]))
+
+    # Actuador 1: ventilador (la temperatura decide su velocidad en modo auto)
+    if v["modo"] == "auto":
+        objetivo = min(1.0, max(0.0, (ST["temperatura"] - u["ventilador_on"]) / 8))
+    else:
+        objetivo = v["velocidad_manual"] / 100
+    v["rpm"] += (objetivo * MAX_RPM - v["rpm"]) * 0.12
+    if objetivo == 0 and v["rpm"] < 5:
+        v["rpm"] = 0.0
+
+    # Actuador 2: alarma (temperatura, humedad o puerta abierta con alarma armada)
+    causas = []
+    if ST["temperatura"] >= u["alarma_temperatura"]:
+        causas.append("temperatura alta")
+    if ST["humedad"] >= u["alarma_humedad"]:
+        causas.append("humedad alta")
+    if a["armada"] and ST["puerta_abierta"]:
+        causas.append("puerta abierta")
+    a["causas"] = causas
+    if not causas:
+        a["silenciada"] = False
+    a["activa"] = bool(causas) and not a["silenciada"]
+
+
+def _actualizar_sensores(detener):
+    global promedio_dht
+    proxima_lectura = 0.0
+    while not detener.is_set():
         with lock:
-            if not ST["corriendo"]:
-                continue
-            s, v, u, a = ST["sim"], ST["ventilador"], ST["umbrales"], ST["alarma"]
-            enfria = v["rpm"] / MAX_RPM * 8  # el ventilador enfría el ambiente
-            ST["temperatura"] += (s["temperatura_ambiente"] - enfria - ST["temperatura"]) * 0.06 \
-                + random.uniform(-0.15, 0.15)
-            ST["humedad"] += (s["humedad_ambiente"] - ST["humedad"]) * 0.08 + random.uniform(-0.4, 0.4)
-            ST["humedad"] = min(100.0, max(0.0, ST["humedad"]))
-
-            # Actuador 1: ventilador (la temperatura decide su velocidad en modo auto)
-            if v["modo"] == "auto":
-                objetivo = min(1.0, max(0.0, (ST["temperatura"] - u["ventilador_on"]) / 8))
-            else:
-                objetivo = v["velocidad_manual"] / 100
-            v["rpm"] += (objetivo * MAX_RPM - v["rpm"]) * 0.12
-            if objetivo == 0 and v["rpm"] < 5:
-                v["rpm"] = 0.0
-
-            # Actuador 2: alarma (temperatura, humedad o puerta abierta con alarma armada)
-            causas = []
-            if ST["temperatura"] >= u["alarma_temperatura"]:
-                causas.append("temperatura alta")
-            if ST["humedad"] >= u["alarma_humedad"]:
-                causas.append("humedad alta")
-            if a["armada"] and ST["puerta_abierta"]:
-                causas.append("puerta abierta")
-            a["causas"] = causas
-            if not causas:
-                a["silenciada"] = False
-            a["activa"] = bool(causas) and not a["silenciada"]
+            if html:
+                _simular()
+            elif time.monotonic() >= proxima_lectura:
+                try:
+                    muestras_dht.append(hardware.leer_dht11())
+                except (RuntimeError, OSError) as error:
+                    app.logger.warning("No se pudo leer el DHT11: %s", error)
+                    promedio_dht = (None, None)
+                if len(muestras_dht) == MUESTRAS_POR_PROMEDIO:
+                    temperaturas, humedades = zip(*muestras_dht)
+                    promedio_dht = (
+                        sum(temperaturas) / MUESTRAS_POR_PROMEDIO,
+                        sum(humedades) / MUESTRAS_POR_PROMEDIO,
+                    )
+                    muestras_dht.clear()
+                proxima_lectura = time.monotonic() + 2
+        detener.wait(0.2)
 
 
-def _leer_hardware(hardware):
-    """Actualiza ambas lecturas juntas y reintenta los fallos del DHT11."""
-    while True:
+def _cerrar_hardware():
+    """Libera el lector con el estado bloqueado."""
+    global hardware
+    if hardware is not None:
         try:
-            temperatura, humedad = hardware.leer_dht11()
+            hardware.cerrar()
         except (RuntimeError, OSError) as error:
-            app.logger.warning("No se pudo leer el DHT11: %s", error)
-            temperatura, humedad = None, None
-        with lock:
-            ST["temperatura"] = temperatura
-            ST["humedad"] = humedad
-        time.sleep(2)
+            app.logger.warning("No se pudo cerrar el DHT11: %s", error)
+        finally:
+            hardware = None
 
 
 # --------------------------------------------------------------------- vistas
 def v_temperatura():
-    valor = ST["temperatura"]
+    valor = ST["temperatura"] if html else promedio_dht[0]
     return {"valor": None if valor is None else round(valor, 1), "unidad": "°C"}
 
 
 def v_humedad():
-    valor = ST["humedad"]
+    valor = ST["humedad"] if html else promedio_dht[1]
     return {"valor": None if valor is None else round(valor, 1), "unidad": "%HR"}
 
 
@@ -119,6 +142,7 @@ def estado():
             "sensores": {"temperatura": v_temperatura(), "humedad": v_humedad()},
         }
     return {
+        "modo": "simulacion",
         "corriendo": ST["corriendo"],
         "sensores": {"temperatura": v_temperatura(), "humedad": v_humedad(), "puerta": v_puerta()},
         "simulacion": dict(ST["sim"]),
@@ -162,13 +186,34 @@ def _cors(r):  # permite abrir el HTML desde otro origen (p. ej. Live Server)
 
 
 # ------------------------------------------------------------------ endpoints
-@app.before_request
-def limitar_rutas_hardware():
-    if not html and (
-        request.path in ("/", "/api/sensores/puerta", "/api/umbrales")
-        or request.path.startswith(("/api/simulacion/", "/api/actuadores/"))
-    ):
-        return jsonify(error="Ruta disponible solo en modo simulación."), 404
+@app.errorhandler(404)
+def _error404(error):
+    return jsonify(error=error.description), 404
+
+
+def _requiere_simulacion():
+    if not html:
+        abort(404, "Ruta disponible solo en modo simulación.")
+
+
+@app.put("/api/modo")
+def put_modo():
+    global html, hardware, promedio_dht
+    activar_html = _bool(_json(), "html")
+    with lock:
+        if not activar_html and hardware is None:
+            try:
+                hardware = Hardware()
+            except (ImportError, NotImplementedError, RuntimeError, OSError) as error:
+                app.logger.warning("No se pudo inicializar el DHT11: %s", error)
+                return jsonify(error=f"No se pudo inicializar el DHT11: {error}"), 503
+        if html != activar_html:
+            if activar_html:
+                _cerrar_hardware()
+            html = activar_html
+            muestras_dht.clear()
+            promedio_dht = (None, None)
+        return jsonify(estado())
 
 
 @app.get("/")
@@ -180,12 +225,12 @@ def panel():
 def indice():
     if not html:
         return jsonify(lectura=["/api/estado", "/api/sensores/temperatura", "/api/sensores/humedad"],
-                       escritura=[])
+                       escritura=["PUT /api/modo"])
     return jsonify(
         lectura=["/api/estado", "/api/sensores/temperatura", "/api/sensores/humedad",
                  "/api/sensores/puerta", "/api/actuadores/ventilador", "/api/actuadores/alarma",
                  "/api/umbrales"],
-        escritura=["PUT /api/actuadores/ventilador", "PUT /api/actuadores/alarma", "PUT /api/umbrales",
+        escritura=["PUT /api/modo", "PUT /api/actuadores/ventilador", "PUT /api/actuadores/alarma", "PUT /api/umbrales",
                    "PUT /api/simulacion/temperatura", "PUT /api/simulacion/humedad",
                    "PUT /api/simulacion/puerta", "PUT /api/simulacion/ejecucion"])
 
@@ -212,6 +257,7 @@ def get_humedad():
 @app.get("/api/sensores/puerta")
 def get_puerta():
     with lock:
+        _requiere_simulacion()
         return jsonify(v_puerta())
 
 
@@ -219,6 +265,7 @@ def get_puerta():
 @app.get("/api/actuadores/ventilador")
 def get_ventilador():
     with lock:
+        _requiere_simulacion()
         return jsonify(v_ventilador())
 
 
@@ -227,6 +274,7 @@ def put_ventilador():
     """Actualiza modo o velocidad. requiere_manual exige que el modo actual sea manual."""
     d = _json()
     with lock:
+        _requiere_simulacion()
         v = ST["ventilador"]
         modo = d.get("modo", v["modo"])
         if modo not in ("auto", "manual"):
@@ -243,6 +291,7 @@ def put_ventilador():
 @app.get("/api/actuadores/alarma")
 def get_alarma():
     with lock:
+        _requiere_simulacion()
         return jsonify(v_alarma())
 
 
@@ -251,6 +300,7 @@ def put_alarma():
     """Cuerpo: {"armada": bool, "silenciada": bool}. Silenciar solo tiene efecto si hay una causa activa."""
     d = _json()
     with lock:
+        _requiere_simulacion()
         a = ST["alarma"]
         if "armada" in d:
             a["armada"] = _bool(d, "armada")
@@ -268,6 +318,7 @@ def put_alarma():
 @app.get("/api/umbrales")
 def get_umbrales():
     with lock:
+        _requiere_simulacion()
         return jsonify(dict(ST["umbrales"]))
 
 
@@ -275,6 +326,7 @@ def get_umbrales():
 def put_umbrales():
     d = _json()
     with lock:
+        _requiere_simulacion()
         for clave, (lo, hi) in LIMITES.items():
             if clave in d:
                 ST["umbrales"][clave] = _num(d, clave, lo, hi)
@@ -286,6 +338,7 @@ def put_umbrales():
 def sim_temperatura():
     d = _json()
     with lock:
+        _requiere_simulacion()
         ST["sim"]["temperatura_ambiente"] = _num(d, "ambiente", 0, 60)
         return jsonify(ST["sim"])
 
@@ -294,6 +347,7 @@ def sim_temperatura():
 def sim_humedad():
     d = _json()
     with lock:
+        _requiere_simulacion()
         ST["sim"]["humedad_ambiente"] = _num(d, "ambiente", 0, 100)
         return jsonify(ST["sim"])
 
@@ -302,6 +356,7 @@ def sim_humedad():
 def sim_puerta():
     d = _json()
     with lock:
+        _requiere_simulacion()
         ST["puerta_abierta"] = _bool(d, "abierta")
         return jsonify(v_puerta())
 
@@ -310,15 +365,21 @@ def sim_puerta():
 def sim_ejecucion():
     d = _json()
     with lock:
+        _requiere_simulacion()
         ST["corriendo"] = _bool(d, "activa")
         return jsonify(corriendo=ST["corriendo"])
 
 
 if __name__ == "__main__":
-    if html:
-        trabajador = threading.Thread(target=_simular, daemon=True)
-    else:
+    if not html:
         hardware = Hardware()
-        trabajador = threading.Thread(target=_leer_hardware, args=(hardware,), daemon=True)
+    detener = threading.Event()
+    trabajador = threading.Thread(target=_actualizar_sensores, args=(detener,), daemon=True)
     trabajador.start()
-    app.run(host="127.0.0.1", port=5000, threaded=True)
+    try:
+        app.run(host="127.0.0.1", port=5000, threaded=True)
+    finally:
+        detener.set()
+        trabajador.join()
+        with lock:
+            _cerrar_hardware()
