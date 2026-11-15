@@ -1,6 +1,6 @@
 # Demo de Biboteca en Raspberry Pi
 
-La Raspberry ejecuta la API y el bot de Telegram. El modo predeterminado usa el panel y el simulador. Para probar el sensor físico, sigue la sección 5.
+La Raspberry ejecuta la API y el bot de Telegram. La API arranca con el DHT11 físico. Prepara el sensor según la sección 5 antes de iniciar la API.
 
 ## 1. Preparar la Raspberry
 
@@ -64,7 +64,7 @@ En el navegador de la Raspberry, abre `http://127.0.0.1:5000/`. Si vas a usar el
 ssh -o ExitOnForwardFailure=yes -N -L 127.0.0.1:8080:127.0.0.1:5000 usuario@192.168.1.50
 ```
 
-En Windows, abre [el panel por el túnel](http://127.0.0.1:8080/) y haz estas comprobaciones:
+En Windows, abre [el panel por el túnel](http://127.0.0.1:8080/). Pulsa **Volver a simulación** para hacer estas comprobaciones:
 
 1. Desde el chat autorizado, envía `/start`. Aparece el teclado de Biboteca. Toca **Estado** y comprueba que aparecen temperatura, humedad y puerta. Las lecturas pueden variar entre la consulta del bot y la del panel mientras corre la simulación.
 2. Con la simulación en marcha, toca **Ventilador → Manual → 60 %**. El bot debe confirmar el ajuste y el panel debe mostrar **Manual** y **60 %**. Las RPM simuladas suben gradualmente.
@@ -91,6 +91,6 @@ sudo apt install libgpiod-dev python3-libgpiod
 .venv/bin/python -m pip install adafruit-blinka adafruit-circuitpython-dht
 ```
 
-Inicia la API con el comando de la sección 3 y abre el panel como se indica en la sección 4. La API arranca en simulación. Pulsa **Usar DHT11** para pasar al modo físico y **Volver a simulación** para regresar. El cambio vale para el panel y para Telegram y dura hasta que se reinicia la API.
+Inicia la API con el comando de la sección 3 y abre el panel como se indica en la sección 4. La API arranca en modo físico. Pulsa **Volver a simulación** para cambiar a la simulación y **Usar DHT11** para regresar al modo físico. El cambio vale para el panel y para Telegram y dura hasta que se reinicia la API.
 
-Arranca el bot y envía `/estado`, `/temperatura` o `/humedad`. La API toma una muestra del DHT11 cada dos segundos como mínimo y publica el promedio de cada grupo de cuatro muestras válidas. El panel y el bot muestran «sin lectura» al activar el modo físico o si falla un intento, hasta que se completa el grupo. La puerta, el ventilador y la alarma están disponibles en modo simulación.
+Arranca el bot y envía `/estado`, `/temperatura` o `/humedad`. La API intenta leer el DHT11 con al menos dos segundos de separación. Desde la primera muestra válida, publica el promedio de hasta las cuatro más recientes. Si falla un intento, el panel y el bot muestran «sin lectura» hasta la siguiente muestra válida. La puerta, el ventilador y la alarma están disponibles en modo simulación.
