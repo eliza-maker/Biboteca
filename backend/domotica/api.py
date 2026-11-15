@@ -72,10 +72,7 @@ def _simular():
 
 
 def _actualizar_sensores(detener):
-    global promedio_dht
-    proxima_lectura = 0.0
-    tem, hum = hardware.leer_dht11()
-    print (f"tem: {tem} , hum: {hum}")
+    print("Promedio DHT11 (temperatura, humedad):", hardware.leer_dht11())
 
 def alerta_puerta_abierta():
     app.logger.warning("Alerta: la puerta se ha abierto.")
