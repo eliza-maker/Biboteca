@@ -33,3 +33,13 @@ class Hardware:
     def cerrar(self):
         """Libera los recursos de captura del sensor."""
         self._dht.exit()
+
+    def _init_(self, al_abrir_puerta=None):
+        self._switch = Button(3, pull_up=True, bounce_time=0.1)
+        
+        # Asignamos el evento a una función externa
+        if al_abrir_puerta:
+            self._switch.when_released = al_abrir_puerta
+            
+    def cerrar(self):
+        self._switch.close()
