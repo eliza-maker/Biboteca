@@ -1,4 +1,5 @@
 """API REST de domótica para el panel simulado o el DHT11 de la Raspberry Pi."""
+from collections import deque
 from pathlib import Path
 import random
 import threading
@@ -18,8 +19,8 @@ FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
 lock = threading.Lock()
 MAX_RPM = 3000
 MUESTRAS_POR_PROMEDIO = 4
-# hardware = None
-muestras_dht = []
+hardware = None
+muestras_dht = deque(maxlen=MUESTRAS_POR_PROMEDIO)
 promedio_dht = (None, None)
 
 ST = {
@@ -74,8 +75,30 @@ def _simular():
 def _actualizar_sensores(detener):
     global promedio_dht
     proxima_lectura = 0.0
-    tem, hum = hardware.leer_dht11()
-    print (f"tem: {tem} , hum: {hum}")
+    while not detener.is_set():
+        with lock:
+            if html:
+                _simular()
+            elif hardware is not None:
+                try:
+                    hardware.actualizar_buzzer_por_contacto()
+                except (RuntimeError, OSError) as error:
+                    app.logger.warning("No se pudo actualizar el buzzer: %s", error)
+
+                if time.monotonic() >= proxima_lectura:
+                    try:
+                        muestras_dht.append(hardware.leer_dht11())
+                    except (RuntimeError, OSError) as error:
+                        app.logger.warning("No se pudo leer el DHT11: %s", error)
+                        promedio_dht = (None, None)
+                    else:
+                        temperaturas, humedades = zip(*muestras_dht)
+                        promedio_dht = (
+                            sum(temperaturas) / len(temperaturas),
+                            sum(humedades) / len(humedades),
+                        )
+                    proxima_lectura = time.monotonic() + 2.0
+        detener.wait(0.2)
 
 
 def _cerrar_hardware():
@@ -85,7 +108,7 @@ def _cerrar_hardware():
         try:
             hardware.cerrar()
         except (RuntimeError, OSError) as error:
-            app.logger.warning("No se pudo cerrar el DHT11: %s", error)
+            app.logger.warning("No se pudo cerrar el hardware: %s", error)
         finally:
             hardware = None
 
@@ -188,8 +211,8 @@ def put_modo():
             try:
                 hardware = Hardware()
             except (ImportError, NotImplementedError, RuntimeError, OSError) as error:
-                app.logger.warning("No se pudo inicializar el DHT11: %s", error)
-                return jsonify(error=f"No se pudo inicializar el DHT11: {error}"), 503
+                app.logger.warning("No se pudo inicializar el hardware: %s", error)
+                return jsonify(error=f"No se pudo inicializar el hardware: {error}"), 503
         if html != activar_html:
             if activar_html:
                 _cerrar_hardware()
