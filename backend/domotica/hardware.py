@@ -10,25 +10,29 @@ class Hardware:
         self._dht = adafruit_dht.DHT11(board.D4)
 
     def leer_dht11(self):
-        count = 0            
-        while count < 5:
-                try:
-                        temp = self._dht.temperature
-                        hum = self._dht.humidity
-                        print(f" tem: {temp}, hum: {hum}")
-                        time.sleep(2.0)
-                        continue
-                except RuntimeError as error:
-                        print(f"error de lectura: {error.args[0]}")
-                        time.sleep(2.0)
-                        continue
-                except Exception as error:
-                        self._dht.exit()
-                        raise error
-        
+        """Promedia las muestras válidas de cinco intentos de lectura."""
+        muestras = []
+
+        for intento in range(5):
+            try:
+                temperatura = self._dht.temperature
+                humedad = self._dht.humidity
+                if temperatura is not None and humedad is not None:
+                    muestras.append((temperatura, humedad))
+            except RuntimeError as error:
+                print(f"Error de lectura: {error}")
+            except Exception:
+                self._dht.exit()
+                raise
+
+            if intento < 4:
                 time.sleep(2.0)
-                count = count + 1
-        return temp, hum
+
+        if not muestras:
+            return None, None
+
+        temperaturas, humedades = zip(*muestras)
+        return sum(temperaturas) / len(muestras), sum(humedades) / len(muestras)
                 
     def cerrar(self):
         """Libera los recursos de captura del sensor."""
