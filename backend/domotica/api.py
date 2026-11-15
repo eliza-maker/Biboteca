@@ -79,7 +79,7 @@ def _actualizar_sensores(detener):
 
 def alerta_puerta_abierta():
     app.logger.warning("Alerta: la puerta se ha abierto.")
-hardware = Hardware(al_abrir_puerta=alerta_puerta_abierta)
+hardware = Hardware()
 
 
 def _cerrar_hardware():
