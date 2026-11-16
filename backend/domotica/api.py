@@ -29,8 +29,12 @@ ST = {
     "ventilador": {"modo": "auto", "velocidad_manual": 0, "rpm": 0.0},
     "alarma": {"armada": True, "silenciada": False, "activa": False, "causas": []},
     "umbrales": {"ventilador_on": 28.0, "alarma_temperatura": 38.0, "alarma_humedad": 85.0},
+    # Estado de los actuadores físicos (solo se actualizan en modo hardware).
+    "hardware": {"motor": False, "buzzer": False},
 }
 LIMITES = {"ventilador_on": (15, 45), "alarma_temperatura": (20, 60), "alarma_humedad": (30, 100)}
+MOTOR_TEMPERATURA = 27.9
+MOTOR_HUMEDAD = 79.9
 
 
 # ---------------------------------------------------------------- simulación
@@ -142,12 +146,18 @@ def _ciclo_hardware(detener):
                                     sum(humedades) / len(humedades))
                     ST["temperatura"] = promedio_dht[0]
                     ST["humedad"] = promedio_dht[1]
+                    # El motor real se enciende con temperatura Y humedad altas.
+                    motor_encendido = (promedio_dht[0] > MOTOR_TEMPERATURA
+                                       and promedio_dht[1] > MOTOR_HUMEDAD)
                 else:
                     promedio_dht = (None, None)
+                    motor_encendido = False
                 ST["puerta_abierta"] = sensor.leer_puerta()
                 _controlar_actuadores()
+                ST["hardware"]["motor"] = motor_encendido
+                ST["hardware"]["buzzer"] = ST["alarma"]["activa"]
                 sensor.aplicar_actuadores(
-                    ventilador_encendido=ST["ventilador"]["rpm"] > 30,
+                    ventilador_encendido=motor_encendido,
                     alarma_activa=ST["alarma"]["activa"],
                 )
             except Exception as error:
@@ -204,11 +214,22 @@ def v_alarma():
             "causas": list(a["causas"])}
 
 
+def v_motor():
+    encendido = ST["hardware"]["motor"]
+    return {"encendido": encendido, "estado": "encendido" if encendido else "apagado"}
+
+
+def v_buzzer():
+    sonando = ST["hardware"]["buzzer"]
+    return {"sonando": sonando, "estado": "sonando" if sonando else "silencioso"}
+
+
 def estado():
     if not html:
         return {
             "modo": "hardware",
-            "sensores": {"temperatura": v_temperatura(), "humedad": v_humedad()},
+            "sensores": {"temperatura": v_temperatura(), "humedad": v_humedad(), "puerta": v_puerta()},
+            "actuadores": {"motor": v_motor(), "buzzer": v_buzzer()},
         }
     return {
         "modo": "simulacion",

@@ -126,7 +126,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blue); outl
   </section>
 
   <!-- MAGNETICO -->
-  <section class="box" data-simulacion>
+  <section class="box">
    <h2>Puerta</h2>
    <div class="num" id="nD">—</div>
    <canvas id="cD" role="img" aria-label="Gráfica reciente del estado de la puerta"></canvas>
@@ -134,7 +134,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--blue); outl
     <div class="door" id="door"><div class="frame"></div><div class="mg f"></div><div class="leaf"><div class="mg d"></div></div></div>
     <div class="col">
      <div><span class="led g" id="dLed"></span><span id="dTxt">Contacto cerrado (imán alineado)</span></div>
-     <button id="tog">Abrir puerta</button>
+     <button id="tog" data-simulacion>Abrir puerta</button>
     </div>
    </div>
   </section>
@@ -254,13 +254,21 @@ function ui(){
  $('modo').disabled=cambiandoModo;
  $('nT').textContent=t===null?'Sin lectura':t.toFixed(1)+' °C';
  $('nH').textContent=h===null?'Sin lectura':h.toFixed(1)+' %HR';
+ if(s.puerta){
+  const ab=s.puerta.abierta;
+  $('nD').textContent=ab?'Abierta':'Cerrada';
+  $('door').classList.toggle('open',ab);
+  $('dLed').className='led '+(ab?'r':'g');
+  $('dTxt').textContent=ab?'Contacto abierto (imán separado)':'Contacto cerrado (imán alineado)';
+  $('tog').textContent=ab?'Cerrar puerta':'Abrir puerta';
+ }
  if(fisico){
   const estadoSensor=t===null?'DHT11 · sin lectura':'DHT11 · sensor físico';
   if($('runStatus').textContent!==estadoSensor)$('runStatus').textContent=estadoSensor;
   $('runLed').className=t===null?'led o':'led g';
   return;
  }
- const v=E.actuadores.ventilador,a=E.actuadores.alarma,u=E.umbrales,ab=s.puerta.abierta;
+ const v=E.actuadores.ventilador,a=E.actuadores.alarma,u=E.umbrales;
  setSlider('amb',E.simulacion.temperatura_ambiente);setSlider('hum',E.simulacion.humedad_ambiente);
  setSlider('fan',v.velocidad_manual);setSlider('tOn',u.ventilador_on);setSlider('tAl',u.alarma_temperatura);setSlider('hAl',u.alarma_humedad);
  labels();
@@ -269,11 +277,6 @@ function ui(){
  const estadoSimulacion=E.corriendo?'Simulación en marcha':'Simulación pausada';
  if($('runStatus').textContent!==estadoSimulacion)$('runStatus').textContent=estadoSimulacion;
  $('runLed').className='led '+(E.corriendo?'g':'');
- $('nD').textContent=ab?'Abierta':'Cerrada';
- $('door').classList.toggle('open',ab);
- $('dLed').className='led '+(ab?'r':'g');
- $('dTxt').textContent=ab?'Contacto abierto (imán separado)':'Contacto cerrado (imán alineado)';
- $('tog').textContent=ab?'Cerrar puerta':'Abrir puerta';
  const auto=v.modo==='auto';
  $('mAuto').classList.toggle('on',auto);$('mMan').classList.toggle('on',!auto);$('fan').disabled=auto;
  $('nR').textContent=v.rpm+' RPM';
@@ -289,7 +292,7 @@ function render(){
  if(!E)return;
  draw($('cT'),D.t,0,60,E.umbrales?.alarma_temperatura,1,'#70ee93');
  draw($('cH'),D.h,0,100,E.umbrales?.alarma_humedad,0,'#68bafa');
- if(E.modo!=='hardware')draw($('cD'),D.d,-0.1,1.2,null,1,'#f6ad67');
+ if(E.sensores.puerta)draw($('cD'),D.d,-0.1,1.2,null,1,'#f6ad67');
 }
 function mostrarEstado(estado,graf){
  if(E?.modo!==estado.modo){D.t=[];D.h=[];D.d=[]}
@@ -297,8 +300,10 @@ function mostrarEstado(estado,graf){
  if(graf&&(E.corriendo||E.modo==='hardware')){
   const t=E.sensores.temperatura.valor,h=E.sensores.humedad.valor;
   if(t!==null&&h!==null){push(D.t,t);push(D.h,h)}
-  if(E.modo!=='hardware'){
+  if(E.sensores.puerta){
    push(D.d,E.sensores.puerta.abierta?1:0);
+  }
+  if(E.modo!=='hardware'){
    tickN++;if(E.actuadores.alarma.activa)beep(tickN%2?880:660);
   }
  }
@@ -338,7 +343,7 @@ $('modo').onclick=async()=>{
 };
 function spin(now){
  const dt=(now-last)/1000;last=now;
- if(E?.actuadores){ang=(ang+E.actuadores.ventilador.rpm/60*360*dt*0.12)%360;$('rot').setAttribute('transform','rotate('+ang.toFixed(1)+')')}
+ if(E?.actuadores?.ventilador){ang=(ang+E.actuadores.ventilador.rpm/60*360*dt*0.12)%360;$('rot').setAttribute('transform','rotate('+ang.toFixed(1)+')')}
  requestAnimationFrame(spin);
 }
 

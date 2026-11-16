@@ -132,7 +132,16 @@ def texto_estado():
         _formatear_lectura("💧 Humedad", sensores["humedad"]),
     ]
     if estado.get("modo") == "hardware":
-        return "\n".join(["📚 Estado de Biboteca", "Raspberry Pi · DHT11", *lecturas])
+        lineas = ["📚 Estado de Biboteca", "Raspberry Pi · DHT11", *lecturas]
+        puerta = estado["sensores"].get("puerta")
+        if puerta:
+            lineas.append(f"🚪 Puerta: {puerta['estado']}")
+        actuadores = estado.get("actuadores", {})
+        if actuadores.get("motor"):
+            lineas.append(f"⚙️ Motor: {actuadores['motor']['estado']}")
+        if actuadores.get("buzzer"):
+            lineas.append(f"🔊 Buzzer: {actuadores['buzzer']['estado']}")
+        return "\n".join(lineas)
 
     actuadores = estado["actuadores"]
     simulacion = "en ejecución" if estado["corriendo"] else "pausada"
