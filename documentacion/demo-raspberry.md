@@ -82,6 +82,14 @@ Apaga la Raspberry antes de conectar el DHT11. Usa los números físicos del con
 | DATA | BCM GPIO4, pin físico 7 |
 | GND | Tierra, pin físico 6 |
 
+Los demás pines del sistema usan numeración BCM (GPIO):
+
+| Componente | BCM GPIO | Tipo |
+| --- | --- | --- |
+| Sensor magnético de puerta | GPIO3 | Entrada con pull-up |
+| Buzzer | GPIO17 | Salida |
+| LED que simula el motor | GPIO23 | Salida |
+
 Si el sensor viene sin resistencia pull-up, conecta una de 4,7 a 10 kΩ entre DATA y 3,3 V. Para un módulo de tres pines, sigue las etiquetas impresas en el módulo. En el sensor de cuatro patas, deja NC sin conectar. [Cableado del DHT11](https://learn.adafruit.com/dht-humidity-sensing-on-raspberry-pi-with-gdocs-logging)
 
 En la Raspberry, desde la carpeta del proyecto y con el entorno virtual de la sección 2 creado, instala las dependencias del GPIO y del DHT11. [Instalación de Blinka en Raspberry Pi](https://learn.adafruit.com/circuitpython-on-raspberrypi-linux/installing-circuitpython-on-raspberry-pi)
@@ -93,4 +101,6 @@ sudo apt install libgpiod-dev python3-libgpiod
 
 Inicia la API con el comando de la sección 3 y abre el panel como se indica en la sección 4. La API arranca en modo físico. Pulsa **Volver a simulación** para cambiar a la simulación y **Usar DHT11** para regresar al modo físico. El cambio vale para el panel y para Telegram y dura hasta que se reinicia la API.
 
-Arranca el bot y envía `/estado`, `/temperatura` o `/humedad`. La API intenta leer el DHT11 con al menos dos segundos de separación. Desde la primera muestra válida, publica el promedio de hasta las cuatro más recientes. Si falla un intento, el panel y el bot muestran «sin lectura» hasta la siguiente muestra válida. La puerta, el ventilador y la alarma están disponibles en modo simulación.
+Arranca el bot y envía `/estado`, `/temperatura` o `/humedad`. La API intenta leer el DHT11 con al menos dos segundos de separación. Desde la primera muestra válida, publica el promedio de hasta las cuatro más recientes. Si falla un intento, el panel y el bot muestran «sin lectura» hasta la siguiente muestra válida.
+
+En modo físico, la puerta se lee del sensor magnético de GPIO3; el ventilador y la alarma se controlan igual que en la simulación (desde el panel o con `/ventilador` y `/alarma` por Telegram) y actúan sobre el LED del motor (GPIO23) y el buzzer (GPIO17).

@@ -6,11 +6,6 @@ import time
 
 from flask import Flask, abort, jsonify, request, send_from_directory
 
-if __package__:
-    from .hardware import Hardware
-else:
-    from hardware import Hardware
-
 html: bool = False  # True: simulación HTML. False: DHT11 en la Raspberry Pi.
 
 app = Flask(__name__, static_folder="static")
@@ -18,9 +13,11 @@ FRONTEND_DIR = Path(__file__).resolve().parents[2] / "frontend"
 lock = threading.Lock()
 MAX_RPM = 3000
 MUESTRAS_POR_PROMEDIO = 4
-# hardware = None
+hardware = None
 muestras_dht = []
 promedio_dht = (None, None)
+_trabajador = None
+_detener = None
 
 ST = {
     "corriendo": True,
@@ -41,12 +38,18 @@ def _simular():
     """Avanza un paso de la simulación con el estado bloqueado."""
     if not ST["corriendo"]:
         return
-    s, v, u, a = ST["sim"], ST["ventilador"], ST["umbrales"], ST["alarma"]
+    s, v = ST["sim"], ST["ventilador"]
     enfria = v["rpm"] / MAX_RPM * 8  # el ventilador enfría el ambiente
     ST["temperatura"] += (s["temperatura_ambiente"] - enfria - ST["temperatura"]) * 0.06 \
         + random.uniform(-0.15, 0.15)
     ST["humedad"] += (s["humedad_ambiente"] - ST["humedad"]) * 0.08 + random.uniform(-0.4, 0.4)
     ST["humedad"] = min(100.0, max(0.0, ST["humedad"]))
+    _controlar_actuadores()
+
+
+def _controlar_actuadores():
+    """Decide ventilador y alarma a partir del estado; el cálculo es el mismo en ambos modos."""
+    v, u, a = ST["ventilador"], ST["umbrales"], ST["alarma"]
 
     # Actuador 1: ventilador (la temperatura decide su velocidad en modo auto)
     if v["modo"] == "auto":
@@ -71,24 +74,106 @@ def _simular():
     a["activa"] = bool(causas) and not a["silenciada"]
 
 
-def _actualizar_sensores(detener):
-    print("Promedio DHT11 (temperatura, humedad):", hardware.leer_dht11())
-
-def alerta_puerta_abierta():
-    app.logger.warning("Alerta: la puerta se ha abierto.")
-hardware = Hardware()
+def _inicializar_hardware():
+    """Crea el lector DHT11 si no existe. Devuelve el mensaje de error o None."""
+    global hardware
+    if hardware is not None:
+        return None
+    try:
+        # Las librerías GPIO/DHT11 solo se importan al usar hardware real, para que
+        # la simulación funcione también en equipos que no las tengan instaladas.
+        if __package__:
+            from .hardware import Hardware
+        else:
+            from hardware import Hardware
+        hardware = Hardware()
+        return None
+    except Exception as error:
+        return f"No se pudo inicializar el hardware: {error}"
 
 
 def _cerrar_hardware():
-    """Libera el lector con el estado bloqueado."""
+    """Libera el lector DHT11."""
     global hardware
     if hardware is not None:
         try:
             hardware.cerrar()
-        except (RuntimeError, OSError) as error:
-            app.logger.warning("No se pudo cerrar el DHT11: %s", error)
+        except Exception as error:
+            app.logger.warning("No se pudo cerrar el hardware: %s", error)
         finally:
             hardware = None
+
+
+def _ciclo_simulacion(detener):
+    """Avanza la simulación cada 250 ms mientras esté en ejecución."""
+    while not detener.wait(0.25):
+        with lock:
+            _simular()
+
+
+def _ciclo_hardware(detener):
+    """Lee los sensores reales, decide actuadores y actualiza las variables globales."""
+    global promedio_dht
+    while not detener.is_set():
+        with lock:
+            sensor = hardware
+        if sensor is None:
+            break
+        error_lectura = False
+        try:
+            temperatura, humedad = sensor.leer_dht11()
+        except Exception as error:
+            app.logger.warning("Error de lectura del DHT11: %s", error)
+            temperatura = humedad = None
+            error_lectura = True
+        with lock:
+            if detener.is_set() or hardware is not sensor:
+                break
+            try:
+                if temperatura is not None and humedad is not None:
+                    muestras_dht.append((temperatura, humedad))
+                    while len(muestras_dht) > MUESTRAS_POR_PROMEDIO:
+                        muestras_dht.pop(0)
+                else:
+                    muestras_dht.clear()
+                if muestras_dht:
+                    temperaturas, humedades = zip(*muestras_dht)
+                    promedio_dht = (sum(temperaturas) / len(temperaturas),
+                                    sum(humedades) / len(humedades))
+                    ST["temperatura"] = promedio_dht[0]
+                    ST["humedad"] = promedio_dht[1]
+                else:
+                    promedio_dht = (None, None)
+                ST["puerta_abierta"] = sensor.leer_puerta()
+                _controlar_actuadores()
+                sensor.aplicar_actuadores(
+                    ventilador_encendido=ST["ventilador"]["rpm"] > 30,
+                    alarma_activa=ST["alarma"]["activa"],
+                )
+            except Exception as error:
+                app.logger.warning("Error leyendo puerta o aplicando actuadores: %s", error)
+        detener.wait(2.0 if error_lectura else 0.1)
+
+
+def _detener_trabajador():
+    """Detiene el ciclo activo (simulación o hardware)."""
+    global _trabajador, _detener
+    if _detener is not None:
+        _detener.set()
+    if _trabajador is not None and _trabajador.is_alive():
+        _trabajador.join(timeout=2)
+    _trabajador = None
+    _detener = None
+
+
+def _iniciar_trabajador():
+    """Arranca el ciclo correspondiente al modo actual."""
+    global _trabajador, _detener
+    _detener_trabajador()
+    _detener = threading.Event()
+    objetivo = _ciclo_simulacion if html else _ciclo_hardware
+    _trabajador = threading.Thread(target=objetivo, args=(_detener,), daemon=True)
+    _trabajador.start()
 
 
 # --------------------------------------------------------------------- vistas
@@ -182,21 +267,27 @@ def _requiere_simulacion():
 
 @app.put("/api/modo")
 def put_modo():
-    global html, hardware, promedio_dht
+    global html, promedio_dht
     activar_html = _bool(_json(), "html")
+    cambio = False
     with lock:
-        if not activar_html and hardware is None:
-            try:
-                hardware = Hardware()
-            except (ImportError, NotImplementedError, RuntimeError, OSError) as error:
-                app.logger.warning("No se pudo inicializar el DHT11: %s", error)
-                return jsonify(error=f"No se pudo inicializar el DHT11: {error}"), 503
-        if html != activar_html:
+        if not activar_html:
+            error = _inicializar_hardware()
+            if error:
+                app.logger.warning("%s", error)
+                return jsonify(error=error), 503
+        cambio = html != activar_html
+        if cambio:
+            html = activar_html
             if activar_html:
                 _cerrar_hardware()
-            html = activar_html
             muestras_dht.clear()
             promedio_dht = (None, None)
+    # Reinicia el ciclo fuera del lock: el trabajador anterior también usa el lock.
+    trabajador_activo = _trabajador is not None and _trabajador.is_alive()
+    if cambio or (not html and not trabajador_activo):
+        _iniciar_trabajador()
+    with lock:
         return jsonify(estado())
 
 
@@ -207,9 +298,6 @@ def panel():
 
 @app.get("/api")
 def indice():
-    if not html:
-        return jsonify(lectura=["/api/estado", "/api/sensores/temperatura", "/api/sensores/humedad"],
-                       escritura=["PUT /api/modo"])
     return jsonify(
         lectura=["/api/estado", "/api/sensores/temperatura", "/api/sensores/humedad",
                  "/api/sensores/puerta", "/api/actuadores/ventilador", "/api/actuadores/alarma",
@@ -241,7 +329,6 @@ def get_humedad():
 @app.get("/api/sensores/puerta")
 def get_puerta():
     with lock:
-        _requiere_simulacion()
         return jsonify(v_puerta())
 
 
@@ -249,7 +336,6 @@ def get_puerta():
 @app.get("/api/actuadores/ventilador")
 def get_ventilador():
     with lock:
-        _requiere_simulacion()
         return jsonify(v_ventilador())
 
 
@@ -258,7 +344,6 @@ def put_ventilador():
     """Actualiza modo o velocidad. requiere_manual exige que el modo actual sea manual."""
     d = _json()
     with lock:
-        _requiere_simulacion()
         v = ST["ventilador"]
         modo = d.get("modo", v["modo"])
         if modo not in ("auto", "manual"):
@@ -275,7 +360,6 @@ def put_ventilador():
 @app.get("/api/actuadores/alarma")
 def get_alarma():
     with lock:
-        _requiere_simulacion()
         return jsonify(v_alarma())
 
 
@@ -284,7 +368,6 @@ def put_alarma():
     """Cuerpo: {"armada": bool, "silenciada": bool}. Silenciar solo tiene efecto si hay una causa activa."""
     d = _json()
     with lock:
-        _requiere_simulacion()
         a = ST["alarma"]
         if "armada" in d:
             a["armada"] = _bool(d, "armada")
@@ -302,7 +385,6 @@ def put_alarma():
 @app.get("/api/umbrales")
 def get_umbrales():
     with lock:
-        _requiere_simulacion()
         return jsonify(dict(ST["umbrales"]))
 
 
@@ -310,7 +392,6 @@ def get_umbrales():
 def put_umbrales():
     d = _json()
     with lock:
-        _requiere_simulacion()
         for clave, (lo, hi) in LIMITES.items():
             if clave in d:
                 ST["umbrales"][clave] = _num(d, clave, lo, hi)
@@ -356,14 +437,13 @@ def sim_ejecucion():
 
 if __name__ == "__main__":
     if not html:
-        hardware = Hardware()
-    detener = threading.Event()
-    trabajador = threading.Thread(target=_actualizar_sensores, args=(detener,), daemon=True)
-    trabajador.start()
+        error = _inicializar_hardware()
+        if error:
+            print(f"Aviso: {error}. Activa la simulación desde el panel con «Volver a simulación».")
+    _iniciar_trabajador()
     try:
         app.run(host="127.0.0.1", port=5000, threaded=True)
     finally:
-        detener.set()
-        trabajador.join()
+        _detener_trabajador()
         with lock:
             _cerrar_hardware()
