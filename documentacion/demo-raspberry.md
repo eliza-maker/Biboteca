@@ -58,7 +58,7 @@ cd ~/Biboteca
 
 ## 4. Abrir el panel y probar la demo
 
-En el navegador de la Raspberry, abre `http://127.0.0.1:5000/`. Si vas a usar el navegador de Windows, abre una tercera ventana de PowerShell y deja este túnel abierto mientras haces la prueba. La API sigue escuchando solo en la Raspberry y el túnel conecta el puerto `8080` del PC con ella. [Reenvío local de puertos con SSH](https://man.openbsd.org/ssh#L)
+En el navegador de la Raspberry, abre `http://127.0.0.1:5000/`. La API escucha en todas las interfaces (`0.0.0.0`), así que desde otro PC de la misma red puedes abrir directamente `http://192.168.1.3:5000/` (usa la IP real de la Raspberry). Si prefieres usar un túnel SSH desde Windows, abre una tercera ventana de PowerShell y deja este túnel abierto mientras haces la prueba. [Reenvío local de puertos con SSH](https://man.openbsd.org/ssh#L)
 
 ```powershell
 ssh -o ExitOnForwardFailure=yes -N -L 127.0.0.1:8080:127.0.0.1:5000 usuario@192.168.1.50

@@ -442,7 +442,7 @@ if __name__ == "__main__":
             print(f"Aviso: {error}. Activa la simulación desde el panel con «Volver a simulación».")
     _iniciar_trabajador()
     try:
-        app.run(host="127.0.0.1", port=5000, threaded=True)
+        app.run(host="0.0.0.0", port=5000, threaded=True)
     finally:
         _detener_trabajador()
         with lock:
